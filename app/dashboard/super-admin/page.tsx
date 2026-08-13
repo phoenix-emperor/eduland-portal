@@ -2,12 +2,12 @@
  * @file app/dashboard/super-admin/page.tsx
  * @description Super Admin Dashboard landing page for Eduland School Portal.
  * Provides system-level management controls and direct access to school administration features
- * (Manage Students, Manage Classes & Subjects, Teacher Assignments, Promote Students, and Admin Dashboard).
+ * (Manage Students, Academic Terms, Manage Classes & Subjects, Teacher Assignments, Promote Students, and Admin Dashboard).
  */
 
 import { requireRole } from '@/lib/auth/guard';
 import Link from 'next/link';
-import { ShieldCheck, Layers, Users, ArrowRight, Building, Trash2, UserCheck, UserPlus } from 'lucide-react';
+import { ShieldCheck, Layers, Users, ArrowRight, Building, Trash2, UserCheck, UserPlus, Calendar } from 'lucide-react';
 
 export default async function SuperAdminDashboardPage() {
   const { profile } = await requireRole('super_admin');
@@ -46,7 +46,7 @@ export default async function SuperAdminDashboardPage() {
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Card 1: Add & Manage Students */}
           <Link
             href="/dashboard/admin/students"
@@ -74,7 +74,34 @@ export default async function SuperAdminDashboardPage() {
             </div>
           </Link>
 
-          {/* Card 2: Manage Classes & Subjects */}
+          {/* Card 2: Academic Terms */}
+          <Link
+            href="/dashboard/admin/terms"
+            className="group bg-white rounded-2xl p-6 border border-olive-200 hover:border-olive-400 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 rounded-xl bg-schoolYellow-100 group-hover:bg-olive-800 transition-colors flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-olive-900 group-hover:text-schoolYellow-400 transition-colors" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-schoolYellow-700 bg-schoolYellow-50 border border-schoolYellow-200 px-2.5 py-0.5 rounded-full">
+                  Sessions & Dates
+                </span>
+              </div>
+              <h3 className="text-lg font-extrabold text-olive-900 mb-2 group-hover:text-olive-800 transition-colors">
+                Academic Terms
+              </h3>
+              <p className="text-olive-600 text-xs mb-6">
+                Configure academic sessions, term names, and next term resumption dates.
+              </p>
+            </div>
+            <div className="flex items-center space-x-2 text-xs font-bold text-olive-800 group-hover:text-olive-950 pt-4 border-t border-olive-100">
+              <span>Manage Academic Terms</span>
+              <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </div>
+          </Link>
+
+          {/* Card 3: Manage Classes & Subjects */}
           <Link
             href="/dashboard/admin/classes-subjects"
             className="group bg-white rounded-2xl p-6 border border-olive-200 hover:border-olive-400 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
@@ -102,7 +129,7 @@ export default async function SuperAdminDashboardPage() {
             </div>
           </Link>
 
-          {/* Card 3: Teacher Assignments */}
+          {/* Card 4: Teacher Assignments */}
           <Link
             href="/dashboard/admin/teacher-assignments"
             className="group bg-white rounded-2xl p-6 border border-olive-200 hover:border-olive-400 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"
@@ -129,7 +156,7 @@ export default async function SuperAdminDashboardPage() {
             </div>
           </Link>
 
-          {/* Card 4: Promote / Move Students */}
+          {/* Card 5: Promote / Move Students */}
           <Link
             href="/dashboard/admin/students/promote"
             className="group bg-white rounded-2xl p-6 border border-olive-200 hover:border-olive-400 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer"

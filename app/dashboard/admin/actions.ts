@@ -662,4 +662,195 @@ export async function updateStudentPassportAction(
   return { success: true };
 }
 
+/**
+ * Creates a new academic term record (session, term name, optional next_term_begins).
+ * Scoped to the acting admin's school (`school_id`).
+ * Surfaces unique constraint (school_id, session, name) violation as a friendly message.
+ *
+ * @param session - Academic session (e.g. "2025/2026").
+ * @param name - Term name (e.g. "First Term", "Second Term", "Third Term").
+ * @param nextTermBegins - Optional date string ("YYYY-MM-DD") when next term starts.
+ * @returns Object with `{ success: true, termId: string }` or `{ error: string }`.
+ */
+export async function createTermAction(
+  session: string,
+  name: string,
+  nextTermBegins?: string | null
+) {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+
+  const trimmedSession = session?.trim();
+  const trimmedName = name?.trim();
+
+  if (!trimmedSession) {
+    return { error: "Academic session is required (e.g. '2025/2026')." };
+  }
+
+  if (!trimmedName) {
+    return { error: "Term name is required." };
+  }
+
+  if (!profile?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await (supabase.from("terms") as any)
+    .insert({
+      school_id: profile.school_id,
+      session: trimmedSession,
+      name: trimmedName,
+      next_term_begins: nextTermBegins || null,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    if (
+      error.code === "23505" ||
+      error.message.includes("terms_school_id_session_name_key") ||
+      error.message.includes("unique") ||
+      error.message.includes("duplicate")
+    ) {
+      return {
+        error: `A term named '${trimmedName}' already exists for session ${trimmedSession}.`,
+      };
+    }
+    return { error: error.message || "Failed to create academic term." };
+  }
+
+  revalidatePath("/dashboard/admin/terms");
+  return { success: true, termId: data.id as string };
+}
+
+/**
+ * Updates an existing academic term record (session, term name, next_term_begins).
+ * Scoped to the acting admin's school (`school_id`).
+ * Surfaces duplicate constraint violation as a friendly message.
+ *
+ * @param termId - ID of term to update.
+ * @param session - Academic session (e.g. "2025/2026").
+ * @param name - Term name (e.g. "First Term").
+ * @param nextTermBegins - Optional date string when next term starts.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function updateTermAction(
+  termId: string,
+  session: string,
+  name: string,
+  nextTermBegins?: string | null
+) {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+
+  if (!termId) {
+    return { error: "Term ID is required." };
+  }
+
+  const trimmedSession = session?.trim();
+  const trimmedName = name?.trim();
+
+  if (!trimmedSession) {
+    return { error: "Academic session is required." };
+  }
+
+  if (!trimmedName) {
+    return { error: "Term name is required." };
+  }
+
+  if (!profile?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await (supabase.from("terms") as any)
+    .update({
+      session: trimmedSession,
+      name: trimmedName,
+      next_term_begins: nextTermBegins || null,
+    })
+    .eq("id", termId)
+    .eq("school_id", profile.school_id);
+
+  if (error) {
+    if (
+      error.code === "23505" ||
+      error.message.includes("terms_school_id_session_name_key") ||
+      error.message.includes("unique") ||
+      error.message.includes("duplicate")
+    ) {
+      return {
+        error: `A term named '${trimmedName}' already exists for session ${trimmedSession}.`,
+      };
+    }
+    return { error: error.message || "Failed to update academic term." };
+  }
+
+  revalidatePath("/dashboard/admin/terms");
+  return { success: true };
+}
+
+/**
+ * Deletes an academic term record after verifying that no scores, attendance,
+ * or report comments reference it.
+ * Scoped to the acting admin's school (`school_id`).
+ *
+ * @param termId - ID of term to delete.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function deleteTermAction(termId: string) {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+
+  if (!termId) {
+    return { error: "Term ID is required." };
+  }
+
+  if (!profile?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const supabase = await createClient();
+
+  // Pre-check 1: Count tied score records
+  const { count: scoresCount } = await (supabase.from("scores") as any)
+    .select("*", { count: "exact", head: true })
+    .eq("term_id", termId)
+    .eq("school_id", profile.school_id);
+
+  // Pre-check 2: Count tied attendance records
+  const { count: attendanceCount } = await (supabase.from("attendance") as any)
+    .select("*", { count: "exact", head: true })
+    .eq("term_id", termId)
+    .eq("school_id", profile.school_id);
+
+  // Pre-check 3: Count tied report_comments records
+  const { count: commentsCount } = await (supabase.from("report_comments") as any)
+    .select("*", { count: "exact", head: true })
+    .eq("term_id", termId)
+    .eq("school_id", profile.school_id);
+
+  const totalRecords =
+    (scoresCount || 0) + (attendanceCount || 0) + (commentsCount || 0);
+
+  if (totalRecords > 0) {
+    return {
+      error: `Can't delete this term — it has ${totalRecords} score/attendance/comment record(s) tied to it. Terms with academic records can't be deleted, to protect student data.`,
+    };
+  }
+
+  // Safe to delete term
+  const { error: deleteErr } = await (supabase.from("terms") as any)
+    .delete()
+    .eq("id", termId)
+    .eq("school_id", profile.school_id);
+
+  if (deleteErr) {
+    return { error: deleteErr.message || "Failed to delete academic term." };
+  }
+
+  revalidatePath("/dashboard/admin/terms");
+  return { success: true };
+}
+
 
