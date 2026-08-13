@@ -7,8 +7,10 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
+import { UserRole } from "@/lib/types/database";
 
 /**
  * Creates a new class scoped to the admin's school.
@@ -852,5 +854,176 @@ export async function deleteTermAction(termId: string) {
   revalidatePath("/dashboard/admin/terms");
   return { success: true };
 }
+
+/**
+ * Invites a new user by email using Supabase Service Role Admin Client.
+ * Automatically synchronizes profile role, full_name, phone, and school_id.
+ * Server-enforces privilege escalation protection: only super_admin can invite a super_admin.
+ *
+ * @param email - Target email address to receive invite.
+ * @param fullName - Optional full name of invited user.
+ * @param role - Target assigned role (parent, teacher, admin, super_admin).
+ * @param phone - Optional phone number string.
+ * @returns Object with `{ success: true, userId: string }` or `{ error: string }`.
+ */
+export async function inviteUserAction(
+  email: string,
+  fullName?: string,
+  role?: UserRole,
+  phone?: string | null
+) {
+  const { profile: actingUser } = await requireRole(["admin", "super_admin"]);
+
+  const trimmedEmail = email?.trim();
+  const trimmedName = fullName?.trim() || "";
+  const trimmedPhone = phone?.trim() || null;
+  const targetRole: UserRole = role || "parent";
+
+  if (!trimmedEmail) {
+    return { error: "Email address is required." };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(trimmedEmail)) {
+    return { error: "Please enter a valid email address." };
+  }
+
+  // Privilege Escalation Protection: Only super_admin can invite as super_admin
+  if (targetRole === "super_admin" && actingUser?.role !== "super_admin") {
+    return {
+      error: "Only super_admin users can assign or invite a super_admin.",
+    };
+  }
+
+  if (!actingUser?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  // Invite user via Supabase Auth Admin API
+  const { data: inviteData, error: inviteErr } =
+    await adminSupabase.auth.admin.inviteUserByEmail(trimmedEmail, {
+      data: { full_name: trimmedName || trimmedEmail },
+    });
+
+  if (inviteErr) {
+    const errMsg = inviteErr.message?.toLowerCase() || "";
+    if (
+      errMsg.includes("already registered") ||
+      errMsg.includes("already exists") ||
+      errMsg.includes("duplicate")
+    ) {
+      return {
+        error: `A user with email '${trimmedEmail}' already exists in the system.`,
+      };
+    }
+    return { error: inviteErr.message || "Failed to send account invitation." };
+  }
+
+  if (!inviteData?.user?.id) {
+    return { error: "Failed to obtain invited user ID." };
+  }
+
+  const invitedUserId = inviteData.user.id;
+
+  // Immediately update/upsert profiles record with assigned role, phone, and school_id
+  const { error: profileUpdateErr } = await adminSupabase
+    .from("profiles")
+    .upsert({
+      id: invitedUserId,
+      school_id: actingUser.school_id,
+      full_name: trimmedName || trimmedEmail,
+      role: targetRole,
+      phone: trimmedPhone,
+    });
+
+  if (profileUpdateErr) {
+    console.error("Profile sync error:", profileUpdateErr);
+  }
+
+  revalidatePath("/dashboard/admin/users");
+  return { success: true, userId: invitedUserId };
+}
+
+/**
+ * Updates an existing user's role and/or phone number in the profiles table.
+ * Server-enforces privilege escalation protection via explicit OR check BEFORE any DB mutation:
+ * Rejects if targetUser.role === 'super_admin' OR newRole === 'super_admin' when acting user is not super_admin.
+ *
+ * @param targetUserId - ID of profile to update.
+ * @param newRole - Target new role (parent, teacher, admin, super_admin).
+ * @param phone - Optional phone number string.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function updateUserProfileAction(
+  targetUserId: string,
+  newRole: UserRole,
+  phone?: string | null
+) {
+  const { profile: actingUser } = await requireRole(["admin", "super_admin"]);
+
+  if (!targetUserId) {
+    return { error: "Target user ID is required." };
+  }
+
+  if (!newRole) {
+    return { error: "Target role is required." };
+  }
+
+  if (!actingUser?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  // Fetch target profile to inspect existing role BEFORE performing any mutations
+  const { data: targetProfile, error: targetErr } = await (
+    adminSupabase.from("profiles") as any
+  )
+    .select("*")
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id)
+    .single();
+
+  if (targetErr || !targetProfile) {
+    return { error: "User profile not found in your school." };
+  }
+
+  // CRITICAL PRIVILEGE ESCALATION GUARD (Explicit OR condition):
+  // Plain admin CANNOT touch an existing super_admin OR promote anyone to super_admin.
+  // Rejects the entire call BEFORE any database mutation occurs (zero side-effects).
+  if (
+    (targetProfile.role === "super_admin" || newRole === "super_admin") &&
+    actingUser.role !== "super_admin"
+  ) {
+    return {
+      error: "Only super_admin users can assign or modify super_admin profiles.",
+    };
+  }
+
+  const trimmedPhone = phone !== undefined ? (phone?.trim() || null) : targetProfile.phone;
+
+  // Update target user's profile role and phone atomically
+  const { error: updateErr } = await (adminSupabase.from("profiles") as any)
+    .update({
+      role: newRole,
+      phone: trimmedPhone,
+    })
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id);
+
+  if (updateErr) {
+    return { error: updateErr.message || "Failed to update user profile." };
+  }
+
+  revalidatePath("/dashboard/admin/users");
+  return { success: true };
+}
+
+/**
+ * Backward compatibility alias for updateUserProfileAction.
+ */
+export const updateUserRoleAction = updateUserProfileAction;
 
 

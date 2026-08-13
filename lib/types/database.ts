@@ -228,6 +228,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           school_id: string
         }
@@ -236,6 +237,7 @@ export type Database = {
           created_at?: string
           full_name: string
           id: string
+          phone?: string | null
           role: Database["public"]["Enums"]["user_role"]
           school_id: string
         }
@@ -244,6 +246,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           school_id?: string
         }
@@ -788,7 +791,9 @@ export const Constants = {
 } as const
 
 export type UserRole = Database["public"]["Enums"]["user_role"];
-export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"] & {
+  phone?: string | null;
+};
 export type ClassItem = Database["public"]["Tables"]["classes"]["Row"] & { class_teacher_id?: string | null };
 export type SubjectItem = Database["public"]["Tables"]["subjects"]["Row"];
 export type StudentItem = Database["public"]["Tables"]["students"]["Row"] & {
