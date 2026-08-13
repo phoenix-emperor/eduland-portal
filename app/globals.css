@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 75 25% 98%;
+    --foreground: 75 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 75 30% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 75 30% 12%;
+
+    /* Olive green primary (#6B7A3D) */
+    --primary: 75 33% 36%;
+    --primary-foreground: 75 25% 98%;
+
+    /* Warm yellow accent (#F2C744) */
+    --accent: 45 87% 61%;
+    --accent-foreground: 45 90% 12%;
+
+    --secondary: 75 20% 92%;
+    --secondary-foreground: 75 35% 25%;
+
+    --muted: 75 15% 94%;
+    --muted-foreground: 75 10% 40%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 75 20% 88%;
+    --input: 75 20% 88%;
+    --ring: 75 33% 36%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 75 20% 8%;
+    --foreground: 75 15% 95%;
+
+    --card: 75 20% 11%;
+    --card-foreground: 75 15% 95%;
+
+    --popover: 75 20% 11%;
+    --popover-foreground: 75 15% 95%;
+
+    --primary: 75 33% 46%;
+    --primary-foreground: 75 25% 98%;
+
+    --accent: 45 87% 61%;
+    --accent-foreground: 45 90% 12%;
+
+    --secondary: 75 15% 18%;
+    --secondary-foreground: 75 15% 90%;
+
+    --muted: 75 15% 18%;
+    --muted-foreground: 75 10% 65%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 75 15% 22%;
+    --input: 75 15% 22%;
+    --ring: 75 33% 46%;
+  }
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
