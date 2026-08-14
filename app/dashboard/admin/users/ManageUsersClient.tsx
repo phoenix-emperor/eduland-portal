@@ -4,7 +4,7 @@
  * @file app/dashboard/admin/users/ManageUsersClient.tsx
  * @description Client Component for Manage Users in Admin Dashboard.
  * Features Part A (Create User with Generated Password & Resend Welcome Email)
- * and Part B (Role-Grouped Collapsible Accordions with Edit, Disable/Enable, and Delete modals).
+ * and Part B (Role-Grouped Collapsible Accordions with Edit, Reset Password, Disable/Enable, and Delete modals).
  */
 
 import { useState, useTransition, useMemo } from 'react';
@@ -13,6 +13,7 @@ import {
   updateUserProfileAction,
   deleteUserAction,
   toggleUserDisabledAction,
+  resetUserPasswordAction,
 } from '@/app/dashboard/admin/actions';
 import { Profile, UserRole } from '@/lib/types/database';
 import {
@@ -38,6 +39,7 @@ import {
   Lock,
   Key,
   Copy,
+  RotateCcw,
 } from 'lucide-react';
 
 export interface UserProfileWithEmail extends Profile {
@@ -101,6 +103,9 @@ export default function ManageUsersClient({
 
   const [togglingUser, setTogglingUser] = useState<UserProfileWithEmail | null>(null);
   const [toggleError, setToggleError] = useState<string | null>(null);
+
+  const [resettingUser, setResettingUser] = useState<UserProfileWithEmail | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   // Search Filter
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -235,6 +240,36 @@ export default function ManageUsersClient({
     });
   };
 
+  // --- Handlers: Reset Password ---
+  const handleOpenResetPasswordModal = (user: UserProfileWithEmail) => {
+    setResettingUser(user);
+    setResetError(null);
+  };
+
+  const handleConfirmResetPassword = () => {
+    if (!resettingUser) return;
+
+    setResetError(null);
+    setSuccessMessage(null);
+
+    startTransition(async () => {
+      const res = await resetUserPasswordAction(resettingUser.id);
+
+      if (res.error) {
+        setResetError(res.error);
+      } else {
+        if (res.generatedPassword) {
+          setCreatedPasswordNotice({
+            password: res.generatedPassword,
+            message: res.message || `Password reset successfully for ${resettingUser.full_name}.`,
+          });
+        }
+        setSuccessMessage(`Reset password for ${resettingUser.full_name}.`);
+        setResettingUser(null);
+      }
+    });
+  };
+
   // --- Handlers: Disable / Enable User ---
   const handleOpenToggleDisabledModal = (user: UserProfileWithEmail) => {
     setTogglingUser(user);
@@ -304,7 +339,7 @@ export default function ManageUsersClient({
             </h1>
           </div>
           <p className="text-olive-700 text-sm font-medium">
-            Create user accounts with generated passwords, send welcome emails, manage roles, and toggle account access.
+            Create user accounts, reset passwords, manage roles, and toggle account access.
           </p>
         </div>
 
@@ -330,13 +365,13 @@ export default function ManageUsersClient({
         </div>
       )}
 
-      {/* Created Password Notice Banner */}
+      {/* Created/Reset Password Notice Banner */}
       {createdPasswordNotice && (
-        <div className="p-5 bg-amber-50 border border-amber-300 rounded-2xl space-y-2 text-amber-950">
+        <div className="p-5 bg-amber-50 border border-amber-300 rounded-2xl space-y-2 text-amber-950 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 font-extrabold text-sm">
               <Key className="w-5 h-5 text-amber-700" />
-              <span>Account Credentials Created</span>
+              <span>Temporary Account Credentials</span>
             </div>
             <button
               onClick={() => setCreatedPasswordNotice(null)}
@@ -348,12 +383,12 @@ export default function ManageUsersClient({
           <p className="text-xs font-medium text-amber-900">
             {createdPasswordNotice.message}
           </p>
-          <div className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between font-mono text-sm font-bold text-olive-950">
+          <div className="p-3.5 bg-white border border-amber-200 rounded-xl flex items-center justify-between font-mono text-sm font-bold text-olive-950">
             <span>Temp Password: {createdPasswordNotice.password}</span>
             <button
               type="button"
               onClick={() => navigator.clipboard.writeText(createdPasswordNotice.password)}
-              className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-sans rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+              className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-sans rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5" />
               <span>Copy</span>
@@ -635,6 +670,16 @@ export default function ManageUsersClient({
                                   <span>Edit</span>
                                 </button>
 
+                                {/* Reset Password Button */}
+                                <button
+                                  onClick={() => handleOpenResetPasswordModal(user)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-colors flex items-center space-x-1 cursor-pointer"
+                                  title="Generate new temporary password"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                  <span>Reset Password</span>
+                                </button>
+
                                 {/* Disable / Enable Toggle Button */}
                                 {!isSelf && (
                                   <button
@@ -642,7 +687,7 @@ export default function ManageUsersClient({
                                     className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center space-x-1 cursor-pointer ${
                                       isDisabled
                                         ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
-                                        : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                                        : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                                     }`}
                                     title={isDisabled ? 'Re-enable account' : 'Disable account'}
                                   >
@@ -776,7 +821,73 @@ export default function ManageUsersClient({
         </div>
       )}
 
-      {/* ================= MODAL 2: DISABLE / ENABLE USER ================= */}
+      {/* ================= MODAL 2: RESET PASSWORD ================= */}
+      {resettingUser && (
+        <div className="fixed inset-0 z-50 bg-olive-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-olive-200 shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 bg-amber-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-schoolYellow-500 flex items-center justify-center text-olive-950 font-bold">
+                  <RotateCcw className="w-4 h-4 stroke-[2.5]" />
+                </div>
+                <h3 className="font-extrabold text-lg tracking-tight">
+                  Reset Password
+                </h3>
+              </div>
+              <button
+                onClick={() => setResettingUser(null)}
+                disabled={isPending}
+                className="p-1 text-amber-200 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm font-medium text-olive-900">
+                Are you sure you want to reset the password for <span className="font-bold text-olive-950">{resettingUser.full_name}</span> ({resettingUser.email})?
+              </p>
+
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-950 text-xs font-semibold leading-relaxed">
+                This will immediately invalidate their current password, generate a new 12-character temporary password, and force them to set a new password on their next login.
+              </div>
+
+              {resetError && (
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-semibold flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{resetError}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setResettingUser(null)}
+                  disabled={isPending}
+                  className="px-4 py-2 border border-olive-300 rounded-xl text-xs font-bold text-olive-800 hover:bg-olive-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmResetPassword}
+                  disabled={isPending}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-4 h-4" />
+                  )}
+                  <span>Generate New Password</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 3: DISABLE / ENABLE USER ================= */}
       {togglingUser && (
         <div className="fixed inset-0 z-50 bg-olive-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-olive-200 shadow-2xl max-w-md w-full overflow-hidden">
@@ -850,7 +961,7 @@ export default function ManageUsersClient({
         </div>
       )}
 
-      {/* ================= MODAL 3: DELETE USER ================= */}
+      {/* ================= MODAL 4: DELETE USER ================= */}
       {deletingUser && (
         <div className="fixed inset-0 z-50 bg-olive-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-olive-200 shadow-2xl max-w-md w-full overflow-hidden">

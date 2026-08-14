@@ -12,7 +12,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import { UserRole } from "@/lib/types/database";
 import { generateRandomPassword } from "@/lib/utils/generatePassword";
-import { sendWelcomeEmail } from "@/lib/email/sendWelcomeEmail";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email/sendWelcomeEmail";
 
 /**
  * Creates a new class scoped to the admin's school.
@@ -1201,6 +1201,116 @@ export async function toggleUserDisabledAction(
 
   revalidatePath("/dashboard/admin/users");
   return { success: true };
+}
+
+/**
+ * Resets a user's password using a crypto-secure generated password.
+ * Updates Auth password via admin client, sets profiles.must_change_password = true,
+ * and attempts to send a password reset email via Resend.
+ * CRITICAL: ALWAYS returns the generated password in the response so the Admin UI displays it.
+ *
+ * @param targetUserId - ID of user account to reset.
+ * @returns Object with `{ success: true, generatedPassword: string, message?: string }` or `{ error: string }`.
+ */
+export async function resetUserPasswordAction(targetUserId: string) {
+  const { profile: actingUser } = await requireRole([
+    "admin",
+    "super_admin",
+  ]);
+
+  if (!targetUserId) {
+    return { error: "Target user ID is required." };
+  }
+
+  if (!actingUser?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  // Fetch target profile to inspect role and details
+  const { data: targetProfile, error: targetErr } = await (
+    adminSupabase.from("profiles") as any
+  )
+    .select("*")
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id)
+    .single();
+
+  if (targetErr || !targetProfile) {
+    return { error: "User profile not found in your school." };
+  }
+
+  // Guard: Reject plain admin resetting a super_admin's password
+  if (targetProfile.role === "super_admin" && actingUser.role !== "super_admin") {
+    return {
+      error: "Only super_admin users can reset a super_admin password.",
+    };
+  }
+
+  // Generate 12-character crypto-secure password
+  const newPassword = generateRandomPassword();
+
+  // 1. Update user password in Supabase Auth via Admin Client
+  const { error: updateAuthErr } = await adminSupabase.auth.admin.updateUserById(
+    targetUserId,
+    { password: newPassword }
+  );
+
+  if (updateAuthErr) {
+    return {
+      error: updateAuthErr.message || "Failed to update user password in Auth.",
+    };
+  }
+
+  // 2. Set must_change_password = true in profiles so next login forces password reset
+  const { error: profileErr } = await (adminSupabase.from("profiles") as any)
+    .update({ must_change_password: true })
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id);
+
+  if (profileErr) {
+    console.error("Failed to set must_change_password flag on reset:", profileErr);
+  }
+
+  // Fetch target user email from Auth API to dispatch email
+  let targetEmail = "";
+  try {
+    const { data: authUserData } = await adminSupabase.auth.admin.getUserById(
+      targetUserId
+    );
+    targetEmail = authUserData?.user?.email || "";
+  } catch (err) {
+    console.error("Failed to fetch user email for reset notification:", err);
+  }
+
+  // Attempt to dispatch password reset email via Resend if email is known
+  let emailSent = false;
+  if (targetEmail) {
+    const emailResult = await sendPasswordResetEmail({
+      toEmail: targetEmail,
+      fullName: targetProfile.full_name || targetEmail,
+      password: newPassword,
+    });
+    emailSent = emailResult.success;
+    if (!emailResult.success) {
+      console.warn(
+        `Password reset email dispatch failed for ${targetEmail}:`,
+        emailResult.error
+      );
+    }
+  }
+
+  revalidatePath("/dashboard/admin/users");
+
+  // ALWAYS return generatedPassword so UI displays it cleanly to admin
+  return {
+    success: true,
+    generatedPassword: newPassword,
+    message: emailSent
+      ? `Password reset successfully! Email notification sent to ${targetEmail}.`
+      : `Password reset successfully! Temporary password: ${newPassword}`,
+  };
 }
 
 
