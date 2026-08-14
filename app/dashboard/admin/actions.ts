@@ -11,6 +11,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth/guard";
 import { revalidatePath } from "next/cache";
 import { UserRole } from "@/lib/types/database";
+import { generateRandomPassword } from "@/lib/utils/generatePassword";
+import { sendWelcomeEmail } from "@/lib/email/sendWelcomeEmail";
 
 /**
  * Creates a new class scoped to the admin's school.
@@ -856,15 +858,15 @@ export async function deleteTermAction(termId: string) {
 }
 
 /**
- * Invites a new user by email using Supabase Service Role Admin Client.
- * Automatically synchronizes profile role, full_name, phone, and school_id.
- * Server-enforces privilege escalation protection: only super_admin can invite a super_admin.
+ * Creates a new user account with a crypto-secure generated password and sends a custom welcome email via Resend.
+ * Sets must_change_password = true and initializes profile role, full_name, phone, and school_id.
+ * Server-enforces privilege escalation protection: only super_admin can create a super_admin account.
  *
- * @param email - Target email address to receive invite.
- * @param fullName - Optional full name of invited user.
+ * @param email - Target email address for the new user.
+ * @param fullName - Optional full name of new user.
  * @param role - Target assigned role (parent, teacher, admin, super_admin).
  * @param phone - Optional phone number string.
- * @returns Object with `{ success: true, userId: string }` or `{ error: string }`.
+ * @returns Object with `{ success: true, userId: string, generatedPassword: string, message?: string }` or `{ error: string }`.
  */
 export async function inviteUserAction(
   email: string,
@@ -888,7 +890,7 @@ export async function inviteUserAction(
     return { error: "Please enter a valid email address." };
   }
 
-  // Privilege Escalation Protection: Only super_admin can invite as super_admin
+  // Privilege Escalation Protection: Only super_admin can create as super_admin
   if (targetRole === "super_admin" && actingUser?.role !== "super_admin") {
     return {
       error: "Only super_admin users can assign or invite a super_admin.",
@@ -901,14 +903,20 @@ export async function inviteUserAction(
 
   const adminSupabase = createAdminClient();
 
-  // Invite user via Supabase Auth Admin API
-  const { data: inviteData, error: inviteErr } =
-    await adminSupabase.auth.admin.inviteUserByEmail(trimmedEmail, {
-      data: { full_name: trimmedName || trimmedEmail },
+  // Generate 12-character crypto-secure password
+  const generatedPassword = generateRandomPassword();
+
+  // Create user via Supabase Auth Admin API
+  const { data: createData, error: createErr } =
+    await adminSupabase.auth.admin.createUser({
+      email: trimmedEmail,
+      password: generatedPassword,
+      email_confirm: true,
+      user_metadata: { full_name: trimmedName || trimmedEmail },
     });
 
-  if (inviteErr) {
-    const errMsg = inviteErr.message?.toLowerCase() || "";
+  if (createErr) {
+    const errMsg = createErr.message?.toLowerCase() || "";
     if (
       errMsg.includes("already registered") ||
       errMsg.includes("already exists") ||
@@ -918,32 +926,59 @@ export async function inviteUserAction(
         error: `A user with email '${trimmedEmail}' already exists in the system.`,
       };
     }
-    return { error: inviteErr.message || "Failed to send account invitation." };
+    return { error: createErr.message || "Failed to create user account." };
   }
 
-  if (!inviteData?.user?.id) {
-    return { error: "Failed to obtain invited user ID." };
+  if (!createData?.user?.id) {
+    return { error: "Failed to obtain created user ID." };
   }
 
-  const invitedUserId = inviteData.user.id;
+  const createdUserId = createData.user.id;
 
-  // Immediately update/upsert profiles record with assigned role, phone, and school_id
-  const { error: profileUpdateErr } = await adminSupabase
-    .from("profiles")
-    .upsert({
-      id: invitedUserId,
+  // Update profiles record created by handle_new_auth_user trigger with assigned role, phone, school_id, and must_change_password = true
+  const { error: profileUpdateErr } = await (adminSupabase.from("profiles") as any)
+    .update({
       school_id: actingUser.school_id,
       full_name: trimmedName || trimmedEmail,
       role: targetRole,
       phone: trimmedPhone,
-    });
+      must_change_password: true,
+    })
+    .eq("id", createdUserId);
 
   if (profileUpdateErr) {
-    console.error("Profile sync error:", profileUpdateErr);
+    console.error("Profile sync error on account creation:", profileUpdateErr);
   }
 
+  // Dispatch custom welcome email via Resend
+  const emailResult = await sendWelcomeEmail({
+    toEmail: trimmedEmail,
+    fullName: trimmedName || trimmedEmail,
+    password: generatedPassword,
+    role: targetRole,
+  });
+
   revalidatePath("/dashboard/admin/users");
-  return { success: true, userId: invitedUserId };
+
+  if (!emailResult.success) {
+    console.warn(
+      `Welcome email dispatch failed for ${trimmedEmail}:`,
+      emailResult.error
+    );
+    return {
+      success: true,
+      userId: createdUserId,
+      generatedPassword,
+      message: `Account created, but the welcome email failed to send. Password: ${generatedPassword} — share this manually.`,
+    };
+  }
+
+  return {
+    success: true,
+    userId: createdUserId,
+    generatedPassword,
+    message: `Account created successfully! Welcome email sent to ${trimmedEmail} with temporary password: ${generatedPassword}`,
+  };
 }
 
 /**
@@ -1025,5 +1060,147 @@ export async function updateUserProfileAction(
  * Backward compatibility alias for updateUserProfileAction.
  */
 export const updateUserRoleAction = updateUserProfileAction;
+
+/**
+ * Deletes a user account from Supabase Auth.
+ * Cascades to profiles. Foreign key references (scores, comments) set to NULL on delete.
+ * Server-enforces guards: Rejects self-deletion and plain admin deleting a super_admin.
+ *
+ * @param targetUserId - ID of user account to delete.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function deleteUserAction(targetUserId: string) {
+  const { user: actingUserAuth, profile: actingUser } = await requireRole([
+    "admin",
+    "super_admin",
+  ]);
+
+  if (!targetUserId) {
+    return { error: "Target user ID is required." };
+  }
+
+  // Guard: Reject self-deletion
+  if (targetUserId === actingUserAuth.id) {
+    return { error: "You cannot delete your own account." };
+  }
+
+  if (!actingUser?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  // Fetch target profile to inspect role
+  const { data: targetProfile, error: targetErr } = await (
+    adminSupabase.from("profiles") as any
+  )
+    .select("*")
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id)
+    .single();
+
+  if (targetErr || !targetProfile) {
+    return { error: "User profile not found in your school." };
+  }
+
+  // Guard: Reject plain admin deleting a super_admin
+  if (targetProfile.role === "super_admin" && actingUser.role !== "super_admin") {
+    return {
+      error: "Only super_admin users can delete a super_admin profile.",
+    };
+  }
+
+  // Delete user from Supabase Auth
+  const { error: deleteErr } = await adminSupabase.auth.admin.deleteUser(
+    targetUserId
+  );
+
+  if (deleteErr) {
+    return { error: deleteErr.message || "Failed to delete user account." };
+  }
+
+  revalidatePath("/dashboard/admin/users");
+  return { success: true };
+}
+
+/**
+ * Disables or re-enables a user account using Supabase Auth ban_duration and profiles.is_disabled.
+ * Server-enforces guards: Rejects self-disabling and plain admin disabling/enabling a super_admin.
+ *
+ * @param targetUserId - ID of user account to toggle.
+ * @param disable - True to disable (ban), false to re-enable.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function toggleUserDisabledAction(
+  targetUserId: string,
+  disable: boolean
+) {
+  const { user: actingUserAuth, profile: actingUser } = await requireRole([
+    "admin",
+    "super_admin",
+  ]);
+
+  if (!targetUserId) {
+    return { error: "Target user ID is required." };
+  }
+
+  // Guard: Reject disabling your own account
+  if (disable && targetUserId === actingUserAuth.id) {
+    return { error: "You cannot disable your own account." };
+  }
+
+  if (!actingUser?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  // Fetch target profile to inspect role
+  const { data: targetProfile, error: targetErr } = await (
+    adminSupabase.from("profiles") as any
+  )
+    .select("*")
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id)
+    .single();
+
+  if (targetErr || !targetProfile) {
+    return { error: "User profile not found in your school." };
+  }
+
+  // Guard: Reject plain admin disabling/enabling a super_admin
+  if (targetProfile.role === "super_admin" && actingUser.role !== "super_admin") {
+    return {
+      error: "Only super_admin users can disable or enable a super_admin profile.",
+    };
+  }
+
+  // 1. Update Auth-level ban in Supabase Auth Admin API
+  const { error: banErr } = await adminSupabase.auth.admin.updateUserById(
+    targetUserId,
+    {
+      ban_duration: disable ? "876000h" : "none", // 100 years ban duration vs none
+    }
+  );
+
+  if (banErr) {
+    return {
+      error: banErr.message || "Failed to update user Auth ban status.",
+    };
+  }
+
+  // 2. Update profiles.is_disabled flag for UI filtering and immediate guard sign-out
+  const { error: profileErr } = await (adminSupabase.from("profiles") as any)
+    .update({ is_disabled: disable })
+    .eq("id", targetUserId)
+    .eq("school_id", actingUser.school_id);
+
+  if (profileErr) {
+    console.error("Failed to update profiles.is_disabled flag:", profileErr);
+  }
+
+  revalidatePath("/dashboard/admin/users");
+  return { success: true };
+}
 
 

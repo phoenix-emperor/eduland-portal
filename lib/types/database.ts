@@ -793,6 +793,8 @@ export const Constants = {
 export type UserRole = Database["public"]["Enums"]["user_role"];
 export type Profile = Database["public"]["Tables"]["profiles"]["Row"] & {
   phone?: string | null;
+  must_change_password?: boolean;
+  is_disabled?: boolean;
 };
 export type ClassItem = Database["public"]["Tables"]["classes"]["Row"] & { class_teacher_id?: string | null };
 export type SubjectItem = Database["public"]["Tables"]["subjects"]["Row"];

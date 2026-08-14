@@ -2,15 +2,17 @@
 
 /**
  * @file app/dashboard/admin/users/ManageUsersClient.tsx
- * @description Client Component for Manage Users (Account Invites & Role Assignments) in Admin Dashboard.
- * Features Part A (Invite New User form with optional Phone) and Part B (Role-Grouped Collapsible Accordions).
- * Enforces privilege escalation rules in UI (hiding super_admin options and Super Admin section for plain admins).
+ * @description Client Component for Manage Users in Admin Dashboard.
+ * Features Part A (Create User with Generated Password & Resend Welcome Email)
+ * and Part B (Role-Grouped Collapsible Accordions with Edit, Disable/Enable, and Delete modals).
  */
 
 import { useState, useTransition, useMemo } from 'react';
 import {
   inviteUserAction,
   updateUserProfileAction,
+  deleteUserAction,
+  toggleUserDisabledAction,
 } from '@/app/dashboard/admin/actions';
 import { Profile, UserRole } from '@/lib/types/database';
 import {
@@ -29,9 +31,13 @@ import {
   ChevronDown,
   ChevronRight,
   Edit2,
-  GraduationCap,
   Briefcase,
   ShieldCheck,
+  Trash2,
+  Ban,
+  Lock,
+  Key,
+  Copy,
 } from 'lucide-react';
 
 export interface UserProfileWithEmail extends Profile {
@@ -72,38 +78,47 @@ export default function ManageUsersClient({
 }: ManageUsersClientProps) {
   const isSuperAdmin = actingUserRole === 'super_admin';
 
-  // Invite Form State
+  // Part A: Form State
   const [inviteEmail, setInviteEmail] = useState<string>('');
   const [inviteFullName, setInviteFullName] = useState<string>('');
   const [invitePhone, setInvitePhone] = useState<string>('');
   const [inviteRole, setInviteRole] = useState<UserRole>('parent');
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [createdPasswordNotice, setCreatedPasswordNotice] = useState<{
+    password: string;
+    message: string;
+  } | null>(null);
 
-  // Edit User Profile Modal State
+  // Part B: Modals State
   const [editingUser, setEditingUser] = useState<UserProfileWithEmail | null>(null);
   const [editRole, setEditRole] = useState<UserRole>('parent');
   const [editPhone, setEditPhone] = useState<string>('');
   const [editError, setEditError] = useState<string | null>(null);
 
-  // User List Search Filter
+  const [deletingUser, setDeletingUser] = useState<UserProfileWithEmail | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState<string>('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [togglingUser, setTogglingUser] = useState<UserProfileWithEmail | null>(null);
+  const [toggleError, setToggleError] = useState<string | null>(null);
+
+  // Search Filter
   const [searchTerm, setSearchTerm] = useState<string>('');
 
-  // Global Feedback
+  // Feedback Messages
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [isPending, startTransition] = useTransition();
 
-  // Available roles for inviting or assigning based on acting user's privilege
   const availableAssignRoles: UserRole[] = isSuperAdmin
     ? ['parent', 'teacher', 'admin', 'super_admin']
     : ['parent', 'teacher', 'admin'];
 
-  // Role sections order for display in Part B
   const displayRoleSections: UserRole[] = isSuperAdmin
     ? ['teacher', 'admin', 'parent', 'super_admin']
     : ['teacher', 'admin', 'parent'];
 
-  // Group filtered profiles by role
+  // Group profiles by role
   const { filteredProfiles, profilesByRole } = useMemo(() => {
     const term = searchTerm.toLowerCase();
     const filtered = profiles.filter(
@@ -129,7 +144,7 @@ export default function ManageUsersClient({
     return { filteredProfiles: filtered, profilesByRole: map };
   }, [profiles, searchTerm]);
 
-  // Accordion Expand/Collapse State (Teachers, Admins, Parents expanded by default if non-empty)
+  // Accordion Expand/Collapse State
   const [expandedSections, setExpandedSections] = useState<Record<UserRole, boolean>>({
     teacher: true,
     admin: true,
@@ -144,11 +159,12 @@ export default function ManageUsersClient({
     }));
   };
 
-  // --- Handlers: Invite User ---
-  const handleInviteUser = (e: React.FormEvent) => {
+  // --- Handlers: Create User ---
+  const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     setInviteError(null);
     setSuccessMessage(null);
+    setCreatedPasswordNotice(null);
 
     const emailVal = inviteEmail.trim();
     const nameVal = inviteFullName.trim();
@@ -160,7 +176,7 @@ export default function ManageUsersClient({
     }
 
     if (!isSuperAdmin && inviteRole === 'super_admin') {
-      setInviteError('Only super_admin users can invite a super_admin.');
+      setInviteError('Only super_admin users can assign a super_admin role.');
       return;
     }
 
@@ -170,9 +186,13 @@ export default function ManageUsersClient({
       if (res.error) {
         setInviteError(res.error);
       } else {
-        setSuccessMessage(
-          `Successfully sent invitation email to ${emailVal} as ${ROLE_LABELS[inviteRole]}.`
-        );
+        if (res.generatedPassword) {
+          setCreatedPasswordNotice({
+            password: res.generatedPassword,
+            message: res.message || 'Account created successfully!',
+          });
+        }
+        setSuccessMessage(`Created account for ${emailVal} (${ROLE_LABELS[inviteRole]}).`);
         setInviteEmail('');
         setInviteFullName('');
         setInvitePhone('');
@@ -181,7 +201,7 @@ export default function ManageUsersClient({
     });
   };
 
-  // --- Handlers: Edit User Profile Modal ---
+  // --- Handlers: Edit Profile ---
   const handleOpenEditModal = (user: UserProfileWithEmail) => {
     setEditingUser(user);
     setEditRole(user.role);
@@ -189,7 +209,7 @@ export default function ManageUsersClient({
     setEditError(null);
   };
 
-  const handleUpdateUserProfile = (e: React.FormEvent) => {
+  const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
 
@@ -215,6 +235,63 @@ export default function ManageUsersClient({
     });
   };
 
+  // --- Handlers: Disable / Enable User ---
+  const handleOpenToggleDisabledModal = (user: UserProfileWithEmail) => {
+    setTogglingUser(user);
+    setToggleError(null);
+  };
+
+  const handleConfirmToggleDisabled = () => {
+    if (!togglingUser) return;
+
+    setToggleError(null);
+    setSuccessMessage(null);
+
+    const willDisable = !togglingUser.is_disabled;
+
+    startTransition(async () => {
+      const res = await toggleUserDisabledAction(togglingUser.id, willDisable);
+
+      if (res.error) {
+        setToggleError(res.error);
+      } else {
+        setSuccessMessage(
+          `Successfully ${willDisable ? 'disabled' : 're-enabled'} account for ${
+            togglingUser.full_name
+          }.`
+        );
+        setTogglingUser(null);
+      }
+    });
+  };
+
+  // --- Handlers: Delete User ---
+  const handleOpenDeleteModal = (user: UserProfileWithEmail) => {
+    setDeletingUser(user);
+    setDeleteConfirmText('');
+    setDeleteError(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deletingUser) return;
+
+    setDeleteError(null);
+    setSuccessMessage(null);
+
+    startTransition(async () => {
+      const res = await deleteUserAction(deletingUser.id);
+
+      if (res.error) {
+        setDeleteError(res.error);
+      } else {
+        setSuccessMessage(
+          `Successfully deleted account for ${deletingUser.full_name} (${deletingUser.email}).`
+        );
+        setDeletingUser(null);
+      }
+    });
+  };
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       {/* Header Banner */}
@@ -223,11 +300,11 @@ export default function ManageUsersClient({
           <div className="flex items-center space-x-3 mb-2">
             <div className="w-3 h-8 bg-schoolYellow-500 rounded-full" />
             <h1 className="text-2xl sm:text-3xl font-extrabold text-olive-900 tracking-tight">
-              Manage Users & Account Invites
+              Manage Users & Roles
             </h1>
           </div>
           <p className="text-olive-700 text-sm font-medium">
-            Invite new school staff or parents via email, capture phone numbers, and manage role assignments.
+            Create user accounts with generated passwords, send welcome emails, manage roles, and toggle account access.
           </p>
         </div>
 
@@ -253,7 +330,39 @@ export default function ManageUsersClient({
         </div>
       )}
 
-      {/* PART A: INVITE NEW USER FORM */}
+      {/* Created Password Notice Banner */}
+      {createdPasswordNotice && (
+        <div className="p-5 bg-amber-50 border border-amber-300 rounded-2xl space-y-2 text-amber-950">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2 font-extrabold text-sm">
+              <Key className="w-5 h-5 text-amber-700" />
+              <span>Account Credentials Created</span>
+            </div>
+            <button
+              onClick={() => setCreatedPasswordNotice(null)}
+              className="text-amber-800 hover:text-amber-950 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs font-medium text-amber-900">
+            {createdPasswordNotice.message}
+          </p>
+          <div className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between font-mono text-sm font-bold text-olive-950">
+            <span>Temp Password: {createdPasswordNotice.password}</span>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(createdPasswordNotice.password)}
+              className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-sans rounded-lg font-bold flex items-center space-x-1 cursor-pointer"
+            >
+              <Copy className="w-3.5 h-3.5" />
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PART A: CREATE NEW USER FORM */}
       <div className="bg-white rounded-2xl border border-olive-200 shadow-sm overflow-hidden">
         <div className="p-5 bg-olive-900 text-white flex items-center space-x-2.5">
           <div className="w-8 h-8 rounded-lg bg-schoolYellow-500 flex items-center justify-center text-olive-950 font-bold">
@@ -261,15 +370,15 @@ export default function ManageUsersClient({
           </div>
           <div>
             <h2 className="font-extrabold text-base tracking-tight">
-              Part A — Invite New User
+              Part A — Create User Account
             </h2>
             <p className="text-2xs text-olive-300 font-medium">
-              Sends an official Supabase email invite and initializes their profile role and phone number.
+              Generates a crypto password, dispatches a welcome email via Resend, and forces password change on first login.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleInviteUser} className="p-6 space-y-4">
+        <form onSubmit={handleCreateUser} className="p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Email Address */}
             <div>
@@ -359,7 +468,7 @@ export default function ManageUsersClient({
               ) : (
                 <Sparkles className="w-4 h-4" />
               )}
-              <span>Send User Invitation</span>
+              <span>Create Account & Send Email</span>
             </button>
           </div>
         </form>
@@ -446,11 +555,14 @@ export default function ManageUsersClient({
                       const isSuperAdminRow = user.role === 'super_admin';
                       const isRowLocked = isSuperAdminRow && !isSuperAdmin;
                       const isSelf = user.id === currentUserId;
+                      const isDisabled = user.is_disabled ?? false;
 
                       return (
                         <div
                           key={user.id}
-                          className="p-4 sm:p-5 hover:bg-olive-50/40 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                          className={`p-4 sm:p-5 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                            isDisabled ? 'bg-red-50/30' : 'hover:bg-olive-50/40'
+                          }`}
                         >
                           <div className="flex items-center space-x-3.5 min-w-0">
                             {/* User Initials Avatar */}
@@ -471,6 +583,12 @@ export default function ManageUsersClient({
                                 {isSelf && (
                                   <span className="px-2 py-0.5 bg-olive-100 text-olive-800 rounded text-2xs font-bold">
                                     You
+                                  </span>
+                                )}
+                                {isDisabled && (
+                                  <span className="px-2 py-0.5 bg-red-100 text-red-800 border border-red-300 rounded text-2xs font-extrabold flex items-center space-x-1">
+                                    <Ban className="w-3 h-3" />
+                                    <span>Disabled</span>
                                   </span>
                                 )}
                               </div>
@@ -494,8 +612,9 @@ export default function ManageUsersClient({
                             </div>
                           </div>
 
-                          {/* Role Badge & Edit Profile Button */}
-                          <div className="flex items-center space-x-3 shrink-0">
+                          {/* Actions Bar */}
+                          <div className="flex items-center space-x-2 shrink-0">
+                            {/* Role Badge */}
                             <span
                               className={`px-2.5 py-1 rounded-lg text-xs border ${
                                 ROLE_BADGE_STYLES[user.role]
@@ -505,13 +624,45 @@ export default function ManageUsersClient({
                             </span>
 
                             {!isRowLocked ? (
-                              <button
-                                onClick={() => handleOpenEditModal(user)}
-                                className="px-3 py-1.5 text-xs font-bold text-olive-800 bg-olive-100 hover:bg-olive-200 rounded-xl transition-colors flex items-center space-x-1.5 cursor-pointer"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                                <span>Edit Profile</span>
-                              </button>
+                              <>
+                                {/* Edit Profile Button */}
+                                <button
+                                  onClick={() => handleOpenEditModal(user)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-olive-800 bg-olive-100 hover:bg-olive-200 rounded-lg transition-colors flex items-center space-x-1 cursor-pointer"
+                                  title="Edit profile & role"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+
+                                {/* Disable / Enable Toggle Button */}
+                                {!isSelf && (
+                                  <button
+                                    onClick={() => handleOpenToggleDisabledModal(user)}
+                                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors flex items-center space-x-1 cursor-pointer ${
+                                      isDisabled
+                                        ? 'bg-emerald-100 text-emerald-900 hover:bg-emerald-200'
+                                        : 'bg-amber-100 text-amber-900 hover:bg-amber-200'
+                                    }`}
+                                    title={isDisabled ? 'Re-enable account' : 'Disable account'}
+                                  >
+                                    <Ban className="w-3.5 h-3.5" />
+                                    <span>{isDisabled ? 'Enable' : 'Disable'}</span>
+                                  </button>
+                                )}
+
+                                {/* Delete Button */}
+                                {!isSelf && (
+                                  <button
+                                    onClick={() => handleOpenDeleteModal(user)}
+                                    className="px-2.5 py-1.5 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors flex items-center space-x-1 cursor-pointer"
+                                    title="Delete account"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Delete</span>
+                                  </button>
+                                )}
+                              </>
                             ) : (
                               <span className="text-2xs font-bold text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-lg">
                                 Locked (Super Admin)
@@ -529,7 +680,7 @@ export default function ManageUsersClient({
         })}
       </div>
 
-      {/* ================= EDIT USER PROFILE MODAL ================= */}
+      {/* ================= MODAL 1: EDIT USER PROFILE ================= */}
       {editingUser && (
         <div className="fixed inset-0 z-50 bg-olive-950/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-olive-200 shadow-2xl max-w-md w-full overflow-hidden">
@@ -556,8 +707,7 @@ export default function ManageUsersClient({
               </button>
             </div>
 
-            <form onSubmit={handleUpdateUserProfile} className="p-6 space-y-4">
-              {/* Role Selection */}
+            <form onSubmit={handleUpdateProfile} className="p-6 space-y-4">
               <div>
                 <label className="block text-xs font-bold uppercase text-olive-900 mb-1">
                   Account Role <span className="text-red-500">*</span>
@@ -576,7 +726,6 @@ export default function ManageUsersClient({
                 </select>
               </div>
 
-              {/* Phone Number */}
               <div>
                 <label className="block text-xs font-bold uppercase text-olive-900 mb-1">
                   Phone Number
@@ -623,6 +772,163 @@ export default function ManageUsersClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 2: DISABLE / ENABLE USER ================= */}
+      {togglingUser && (
+        <div className="fixed inset-0 z-50 bg-olive-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-olive-200 shadow-2xl max-w-md w-full overflow-hidden">
+            <div className={`p-6 text-white flex items-center justify-between ${
+              togglingUser.is_disabled ? 'bg-emerald-800' : 'bg-amber-900'
+            }`}>
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center font-bold">
+                  <Ban className="w-4 h-4" />
+                </div>
+                <h3 className="font-extrabold text-lg tracking-tight">
+                  {togglingUser.is_disabled ? 'Enable Account' : 'Disable Account'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setTogglingUser(null)}
+                disabled={isPending}
+                className="p-1 text-white/70 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm font-medium text-olive-900">
+                Are you sure you want to {togglingUser.is_disabled ? 're-enable' : 'disable'} the account for <span className="font-bold text-olive-950">{togglingUser.full_name}</span> ({togglingUser.email})?
+              </p>
+
+              {!togglingUser.is_disabled && (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-semibold leading-relaxed">
+                  Notice: They will be signed out on their next server request and prevented from logging in until re-enabled.
+                </div>
+              )}
+
+              {toggleError && (
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-semibold flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{toggleError}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setTogglingUser(null)}
+                  disabled={isPending}
+                  className="px-4 py-2 border border-olive-300 rounded-xl text-xs font-bold text-olive-800 hover:bg-olive-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmToggleDisabled}
+                  disabled={isPending}
+                  className={`px-5 py-2 font-bold text-xs rounded-xl shadow-sm flex items-center space-x-1.5 disabled:opacity-50 cursor-pointer ${
+                    togglingUser.is_disabled
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'bg-amber-600 hover:bg-amber-700 text-white'
+                  }`}
+                >
+                  {isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Ban className="w-4 h-4" />
+                  )}
+                  <span>{togglingUser.is_disabled ? 'Confirm Enable' : 'Confirm Disable'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL 3: DELETE USER ================= */}
+      {deletingUser && (
+        <div className="fixed inset-0 z-50 bg-olive-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-olive-200 shadow-2xl max-w-md w-full overflow-hidden">
+            <div className="p-6 bg-red-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center text-white font-bold">
+                  <Trash2 className="w-4 h-4" />
+                </div>
+                <h3 className="font-extrabold text-lg tracking-tight">
+                  Delete User Account
+                </h3>
+              </div>
+              <button
+                onClick={() => setDeletingUser(null)}
+                disabled={isPending}
+                className="p-1 text-red-200 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-sm font-medium text-olive-900">
+                Are you sure you want to delete <span className="font-bold text-olive-950">{deletingUser.full_name}</span> ({deletingUser.email})?
+              </p>
+
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-900 text-xs font-semibold leading-relaxed">
+                This will permanently delete this account. They will no longer be able to log in. Any scores or comments they previously entered will remain on record but will no longer show who entered them. This cannot be undone.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-olive-900 mb-1">
+                  Type <span className="font-mono text-red-600 font-extrabold">{deletingUser.email || 'DELETE'}</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  placeholder={deletingUser.email || 'DELETE'}
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-olive-300 rounded-xl text-sm font-semibold text-olive-900 focus:outline-none focus:ring-2 focus:ring-red-500 font-mono"
+                />
+              </div>
+
+              {deleteError && (
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-800 text-xs font-semibold flex items-center space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletingUser(null)}
+                  disabled={isPending}
+                  className="px-4 py-2 border border-olive-300 rounded-xl text-xs font-bold text-olive-800 hover:bg-olive-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  disabled={
+                    isPending ||
+                    (deleteConfirmText !== deletingUser.email &&
+                      deleteConfirmText.toUpperCase() !== 'DELETE')
+                  }
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-sm flex items-center space-x-1.5 disabled:opacity-40 cursor-pointer"
+                >
+                  {isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  <span>Permanently Delete</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
