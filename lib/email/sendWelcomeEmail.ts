@@ -4,7 +4,7 @@
  * Includes temporary login credentials and password reset instructions for first-time login.
  */
 
-import { Resend } from 'resend';
+import { Resend } from "resend";
 
 interface SendWelcomeEmailParams {
   toEmail: string;
@@ -21,16 +21,18 @@ export async function sendWelcomeEmail({
 }: SendWelcomeEmailParams): Promise<{ success: boolean; error?: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.error('Missing RESEND_API_KEY environment variable.');
-    return { success: false, error: 'Missing RESEND_API_KEY configuration.' };
+    console.error("Missing RESEND_API_KEY environment variable.");
+    return { success: false, error: "Missing RESEND_API_KEY configuration." };
   }
 
   const resend = new Resend(apiKey);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const loginUrl = `${appUrl}/login`;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Eduland Portal <onboarding@resend.dev>';
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    "Eduland Portal <info@notifications.edulandschools.com>";
 
-  const subject = 'Your Eduland Portal account is ready';
+  const subject = "Your Eduland Portal account is ready";
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c2b18; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded-radius: 12px;">
@@ -72,14 +74,20 @@ export async function sendWelcomeEmail({
     });
 
     if (response.error) {
-      console.error('Resend API returned error:', response.error);
-      return { success: false, error: response.error.message || 'Resend dispatch failed.' };
+      console.error("Resend API returned error:", response.error);
+      return {
+        success: false,
+        error: response.error.message || "Resend dispatch failed.",
+      };
     }
 
     return { success: true };
   } catch (err: any) {
-    console.error('Failed to dispatch welcome email via Resend:', err);
-    return { success: false, error: err?.message || 'Failed to dispatch email.' };
+    console.error("Failed to dispatch welcome email via Resend:", err);
+    return {
+      success: false,
+      error: err?.message || "Failed to dispatch email.",
+    };
   }
 }
 
@@ -93,19 +101,24 @@ export async function sendPasswordResetEmail({
   toEmail,
   fullName,
   password,
-}: SendPasswordResetEmailParams): Promise<{ success: boolean; error?: string }> {
+}: SendPasswordResetEmailParams): Promise<{
+  success: boolean;
+  error?: string;
+}> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.error('Missing RESEND_API_KEY environment variable.');
-    return { success: false, error: 'Missing RESEND_API_KEY configuration.' };
+    console.error("Missing RESEND_API_KEY environment variable.");
+    return { success: false, error: "Missing RESEND_API_KEY configuration." };
   }
 
   const resend = new Resend(apiKey);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const loginUrl = `${appUrl}/login`;
-  const fromEmail = process.env.RESEND_FROM_EMAIL || 'Eduland Portal <onboarding@resend.dev>';
+  const fromEmail =
+    process.env.RESEND_FROM_EMAIL ||
+    "Eduland Portal <info@notifications.edulandschools.com>";
 
-  const subject = 'Your Eduland Portal password has been reset';
+  const subject = "Your Eduland Portal password has been reset";
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c2b18; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
@@ -147,13 +160,19 @@ export async function sendPasswordResetEmail({
     });
 
     if (response.error) {
-      console.error('Resend API returned error:', response.error);
-      return { success: false, error: response.error.message || 'Resend dispatch failed.' };
+      console.error("Resend API returned error:", response.error);
+      return {
+        success: false,
+        error: response.error.message || "Resend dispatch failed.",
+      };
     }
 
     return { success: true };
   } catch (err: any) {
-    console.error('Failed to dispatch password reset email via Resend:', err);
-    return { success: false, error: err?.message || 'Failed to dispatch email.' };
+    console.error("Failed to dispatch password reset email via Resend:", err);
+    return {
+      success: false,
+      error: err?.message || "Failed to dispatch email.",
+    };
   }
 }

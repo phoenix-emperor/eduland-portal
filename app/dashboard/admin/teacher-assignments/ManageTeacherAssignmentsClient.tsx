@@ -25,6 +25,8 @@ import {
   User,
   GraduationCap,
   ShieldCheck,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { ClassItem, SubjectItem, Profile } from '@/lib/types/database';
 
@@ -68,6 +70,15 @@ export default function ManageTeacherAssignmentsClient({
   // Form state for Part B (Class Teacher)
   const [classTeacherError, setClassTeacherError] = useState<string | null>(null);
   const [classTeacherSuccess, setClassTeacherSuccess] = useState<string | null>(null);
+  // Accordion Expand/Collapse State for Part A Class Sections
+  const [expandedClasses, setExpandedClasses] = useState<Record<string, boolean>>({});
+
+  const toggleClassSection = (classId: string) => {
+    setExpandedClasses((prev) => ({
+      ...prev,
+      [classId]: !prev[classId],
+    }));
+  };
 
   const [isPending, startTransition] = useTransition();
 
@@ -327,69 +338,101 @@ export default function ManageTeacherAssignmentsClient({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-6">
+                <div className="grid grid-cols-1 gap-4">
                   {classes.map((cls) => {
                     const clsAssignments = assignmentsByClass[cls.id] || [];
+                    const isExpanded = expandedClasses[cls.id] ?? false;
+
                     return (
                       <div
                         key={cls.id}
-                        className="p-5 bg-white rounded-xl border border-olive-200 shadow-sm space-y-4"
+                        className="bg-white rounded-2xl border border-olive-200 shadow-sm overflow-hidden transition-all"
                       >
-                        <div className="flex items-center justify-between border-b border-olive-100 pb-3">
-                          <div className="flex items-center space-x-2">
-                            <GraduationCap className="w-5 h-5 text-olive-800" />
-                            <h3 className="font-bold text-olive-900 text-base">
-                              {cls.name}
-                            </h3>
+                        {/* Accordion Header */}
+                        <button
+                          type="button"
+                          onClick={() => toggleClassSection(cls.id)}
+                          className="w-full p-4 sm:p-5 bg-olive-50/80 hover:bg-olive-100/70 border-b border-olive-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors text-left cursor-pointer"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 bg-olive-200/70 text-olive-900 rounded-lg shrink-0">
+                              <GraduationCap className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2.5">
+                                <h3 className="font-extrabold text-olive-900 text-base">
+                                  {cls.name}
+                                </h3>
+                                <span className="px-2.5 py-0.5 bg-schoolYellow-100 border border-schoolYellow-300 text-olive-950 text-xs font-bold rounded-full font-mono">
+                                  {clsAssignments.length} {clsAssignments.length === 1 ? 'assignment' : 'assignments'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
 
-                          {cls.classTeacherName ? (
-                            <span className="text-xs font-bold bg-schoolYellow-100 text-olive-900 px-3 py-1 rounded-full border border-schoolYellow-200 flex items-center space-x-1">
-                              <UserCheck className="w-3.5 h-3.5 text-schoolYellow-700" />
-                              <span>Class Teacher: {cls.classTeacherName}</span>
-                            </span>
-                          ) : (
-                            <span className="text-xs font-semibold bg-olive-50 text-olive-600 px-3 py-1 rounded-full border border-olive-200">
-                              Class Teacher: Not assigned
-                            </span>
-                          )}
-                        </div>
+                          <div className="flex items-center space-x-3 justify-between sm:justify-end">
+                            {cls.classTeacherName ? (
+                              <span className="text-xs font-bold bg-schoolYellow-100 text-olive-900 px-3 py-1 rounded-full border border-schoolYellow-200 flex items-center space-x-1 shrink-0">
+                                <UserCheck className="w-3.5 h-3.5 text-schoolYellow-700" />
+                                <span>Class Teacher: {cls.classTeacherName}</span>
+                              </span>
+                            ) : (
+                              <span className="text-xs font-semibold bg-olive-50 text-olive-600 px-3 py-1 rounded-full border border-olive-200 shrink-0">
+                                Class Teacher: Not assigned
+                              </span>
+                            )}
 
-                        {clsAssignments.length === 0 ? (
-                          <p className="text-xs text-olive-500 font-medium italic py-2">
-                            No subject teachers assigned to this class yet.
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {clsAssignments.map((a) => (
-                              <div
-                                key={a.id}
-                                className="p-3.5 bg-olive-50/70 rounded-lg border border-olive-200 flex items-center justify-between gap-2"
-                              >
-                                <div>
-                                  <p className="font-bold text-xs text-olive-950">
-                                    {a.subjectName}
-                                  </p>
-                                  <p className="text-xs font-medium text-olive-700 mt-0.5 flex items-center space-x-1">
-                                    <User className="w-3 h-3 text-olive-500" />
-                                    <span>{a.teacherName}</span>
-                                  </p>
-                                </div>
-                                <button
-                                  onClick={() =>
-                                    handleUnassignSubjectTeacher(
-                                      a.id,
-                                      `${a.teacherName} (${a.subjectName} - ${cls.name})`
-                                    )
-                                  }
-                                  disabled={isPending}
-                                  className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer shrink-0"
-                                  title="Unassign Teacher"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                            <div className="flex items-center space-x-1 text-olive-600 font-bold text-xs shrink-0">
+                              <span>{isExpanded ? 'Collapse' : 'Expand'}</span>
+                              {isExpanded ? (
+                                <ChevronDown className="w-5 h-5 text-olive-800" />
+                              ) : (
+                                <ChevronRight className="w-5 h-5 text-olive-800" />
+                              )}
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* Accordion Content Panel */}
+                        {isExpanded && (
+                          <div className="p-5 bg-white">
+                            {clsAssignments.length === 0 ? (
+                              <p className="text-xs text-olive-500 font-medium italic py-2">
+                                No subject teachers assigned to this class yet.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {clsAssignments.map((a) => (
+                                  <div
+                                    key={a.id}
+                                    className="p-3.5 bg-olive-50/70 rounded-lg border border-olive-200 flex items-center justify-between gap-2"
+                                  >
+                                    <div>
+                                      <p className="font-bold text-xs text-olive-950">
+                                        {a.subjectName}
+                                      </p>
+                                      <p className="text-xs font-medium text-olive-700 mt-0.5 flex items-center space-x-1">
+                                        <User className="w-3 h-3 text-olive-500" />
+                                        <span>{a.teacherName}</span>
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        handleUnassignSubjectTeacher(
+                                          a.id,
+                                          `${a.teacherName} (${a.subjectName} - ${cls.name})`
+                                        )
+                                      }
+                                      disabled={isPending}
+                                      className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                                      title="Unassign Teacher"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
                           </div>
                         )}
                       </div>
