@@ -530,3 +530,54 @@ export async function getCommentsStudentsAndRecordsAction({
 
   return { students, commentsMap };
 }
+
+/**
+ * Removes the current acting teacher from a specific subject assignment.
+ * TEACHER-ONLY: Restricted strictly to plain teacher role.
+ * Security: Deletes ONLY the teacher_assignments row matching the given assignment ID
+ * AND teacher_id equal to the authenticated user's ID. Never touches the subjects table.
+ *
+ * @param teacherAssignmentId - ID of the teacher_assignments record to delete.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function unassignMyselfAction(
+  teacherAssignmentId: string
+): Promise<{ success?: boolean; error?: string }> {
+  const { user, profile } = await requireRole(['teacher']);
+
+  if (!profile?.school_id) {
+    return { error: 'School ID not found for your account.' };
+  }
+
+  if (!teacherAssignmentId) {
+    return { error: 'Teacher Assignment ID is required.' };
+  }
+
+  const supabase = await createClient();
+
+  try {
+    // Delete ONLY the specific teacher_assignments record belonging to this teacher
+    const { error: deleteErr } = await supabase
+      .from('teacher_assignments')
+      .delete()
+      .eq('id', teacherAssignmentId)
+      .eq('teacher_id', user.id)
+      .eq('school_id', profile.school_id);
+
+    if (deleteErr) {
+      console.error('Unassign teacher assignment error:', deleteErr);
+      const errMsg = deleteErr.message?.toLowerCase() || '';
+
+      if (errMsg.includes('row-level security') || errMsg.includes('policy')) {
+        return { error: 'You do not have permission to remove this assignment.' };
+      }
+      return { error: deleteErr.message || 'Failed to remove assignment.' };
+    }
+
+    revalidatePath('/dashboard/teacher/subjects');
+    return { success: true };
+  } catch (err: any) {
+    console.error('Unexpected error during unassigning assignment:', err);
+    return { error: err?.message || 'An unexpected error occurred while removing assignment.' };
+  }
+}

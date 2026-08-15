@@ -265,6 +265,87 @@ export async function renameSubjectAction(subjectId: string, newName: string) {
 }
 
 /**
+ * Deletes a subject. Restricted strictly to Super Admin users.
+ * Blocks deletion if active teacher assignments or recorded scores exist for this subject.
+ *
+ * @param subjectId - ID of the subject to delete.
+ * @param subjectName - Display name of the subject for error messaging.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function deleteSubjectAction(subjectId: string, subjectName: string) {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+
+  if (profile?.role !== "super_admin") {
+    return {
+      error: "Permission denied: Only Super Admins can delete subjects.",
+    };
+  }
+
+  if (!subjectId) {
+    return { error: "Subject ID is required." };
+  }
+
+  const supabase = await createClient();
+
+  // 1. Pre-check count of active teacher assignments for this subject
+  const { count: assignmentCount, error: assignCountErr } = await (
+    supabase.from("teacher_assignments") as any
+  )
+    .select("id", { count: "exact", head: true })
+    .eq("subject_id", subjectId);
+
+  if (assignCountErr) {
+    console.error("Subject assignment check error:", assignCountErr);
+  }
+
+  if (assignmentCount && assignmentCount > 0) {
+    return {
+      error: `Can't delete '${subjectName}' — it still has teacher assignments or scores tied to it. Remove those first.`,
+    };
+  }
+
+  // 2. Pre-check count of recorded scores for this subject
+  const { count: scoreCount, error: scoreCountErr } = await (
+    supabase.from("scores") as any
+  )
+    .select("id", { count: "exact", head: true })
+    .eq("subject_id", subjectId);
+
+  if (scoreCountErr) {
+    console.error("Subject scores check error:", scoreCountErr);
+  }
+
+  if (scoreCount && scoreCount > 0) {
+    return {
+      error: `Can't delete '${subjectName}' — it still has teacher assignments or scores tied to it. Remove those first.`,
+    };
+  }
+
+  // 3. Attempt subject deletion
+  const { error } = await (supabase.from("subjects") as any)
+    .delete()
+    .eq("id", subjectId)
+    .eq("school_id", profile.school_id);
+
+  if (error) {
+    console.error("Subject deletion error:", error);
+    if (
+      error.code === "23503" ||
+      error.message?.includes("foreign key") ||
+      error.message?.includes("violates foreign key constraint")
+    ) {
+      return {
+        error: `Can't delete '${subjectName}' — it still has teacher assignments or scores tied to it. Remove those first.`,
+      };
+    }
+    return { error: error.message || "Failed to delete subject." };
+  }
+
+  revalidatePath("/dashboard/admin/classes-subjects");
+  return { success: true };
+}
+
+/**
  * Moves/promotes selected students from an old class to a new target class.
  * Records historical enrollment entries in `enrollments` for the old class & session.
  *
@@ -1311,6 +1392,120 @@ export async function resetUserPasswordAction(targetUserId: string) {
       ? `Password reset successfully! Email notification sent to ${targetEmail}.`
       : `Password reset successfully! Temporary password: ${newPassword}`,
   };
+}
+
+/**
+ * Links a parent account (guardian) to a student.
+ * Requires admin or super_admin role.
+ * Handles primary key conflict (duplicate link) gracefully.
+ *
+ * @param studentId - Target student ID.
+ * @param guardianUserId - Target parent profile ID.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function linkGuardianAction(
+  studentId: string,
+  guardianUserId: string
+): Promise<{ success?: boolean; error?: string }> {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+
+  if (!profile?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  if (!studentId || !guardianUserId) {
+    return { error: "Student ID and Guardian User ID are required." };
+  }
+
+  const supabase = await createClient();
+
+  // 1. Verify student belongs to this school
+  const { data: studentCheck } = await (supabase.from("students") as any)
+    .select("id")
+    .eq("id", studentId)
+    .eq("school_id", profile.school_id)
+    .maybeSingle();
+
+  if (!studentCheck) {
+    return { error: "Student record not found in your school." };
+  }
+
+  // 2. Verify target guardian profile belongs to this school and has role 'parent'
+  const { data: guardianCheck } = await (supabase.from("profiles") as any)
+    .select("id, full_name, role")
+    .eq("id", guardianUserId)
+    .eq("school_id", profile.school_id)
+    .maybeSingle();
+
+  if (!guardianCheck) {
+    return { error: "Parent profile not found in your school." };
+  }
+
+  if (guardianCheck.role !== "parent") {
+    return { error: "Selected user profile is not a parent account." };
+  }
+
+  // 3. Attempt insert into guardians_students
+  const { error } = await (supabase.from("guardians_students") as any).insert({
+    guardian_id: guardianUserId,
+    student_id: studentId,
+  });
+
+  if (error) {
+    console.error("Link guardian error:", error);
+    if (
+      error.code === "23505" ||
+      error.message?.includes("duplicate") ||
+      error.message?.includes("primary key") ||
+      error.message?.includes("unique")
+    ) {
+      return { error: "This parent account is already linked to this student." };
+    }
+    return { error: error.message || "Failed to link guardian to student." };
+  }
+
+  revalidatePath("/dashboard/admin/students");
+  revalidatePath("/dashboard/parent");
+  return { success: true };
+}
+
+/**
+ * Unlinks a parent account (guardian) from a student.
+ * Requires admin or super_admin role.
+ *
+ * @param studentId - Target student ID.
+ * @param guardianUserId - Target parent profile ID.
+ * @returns Object with `{ success: true }` or `{ error: string }`.
+ */
+export async function unlinkGuardianAction(
+  studentId: string,
+  guardianUserId: string
+): Promise<{ success?: boolean; error?: string }> {
+  const { profile } = await requireRole(["admin", "super_admin"]);
+
+  if (!profile?.school_id) {
+    return { error: "School ID not found for your account." };
+  }
+
+  if (!studentId || !guardianUserId) {
+    return { error: "Student ID and Guardian User ID are required." };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await (supabase.from("guardians_students") as any)
+    .delete()
+    .eq("student_id", studentId)
+    .eq("guardian_id", guardianUserId);
+
+  if (error) {
+    console.error("Unlink guardian error:", error);
+    return { error: error.message || "Failed to unlink guardian." };
+  }
+
+  revalidatePath("/dashboard/admin/students");
+  revalidatePath("/dashboard/parent");
+  return { success: true };
 }
 
 

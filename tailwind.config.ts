@@ -1,5 +1,13 @@
 import type { Config } from "tailwindcss";
 
+/**
+ * @file tailwind.config.ts
+ * @description Central Tailwind CSS configuration for Eduland Portal.
+ * Contains official Eduland brand color definitions for `olive` (primary green)
+ * and `schoolYellow` (accent gold). Do not edit individual component files;
+ * all existing utility classes automatically inherit these exact brand hex values.
+ */
+
 const config: Config = {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -42,24 +50,34 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+
+        /** Official Eduland Primary Green Ramp (#269D43) */
         olive: {
-          50: "#f6f7f2",
-          100: "#e8ebd9",
-          200: "#d2d8b5",
-          300: "#b4be87",
-          400: "#8e9d58",
-          500: "#6b7a3d",
-          600: "#5b6932",
-          700: "#4b572a",
-          800: "#3a4420",
-          900: "#293116",
+          50: "#EAF3DE",
+          100: "#D3E8C2",
+          200: "#B0D695",
+          300: "#8AC168",
+          400: "#5CA83F",
+          500: "#3D9331",
+          600: "#269D43",
+          700: "#1B7A34",
+          800: "#145E28",
+          900: "#0D451D",
+          950: "#082E13",
         },
+
+        /** Official Eduland Accent Gold Ramp (#D4AF37) */
         schoolYellow: {
-          300: "#f8df85",
-          400: "#f5d15c",
-          500: "#f2c744",
-          600: "#d9ab27",
-          700: "#b58917",
+          50: "#FDF8E8",
+          100: "#FAEEC3",
+          200: "#F4DD8E",
+          300: "#EDCB5C",
+          400: "#DFBB44",
+          500: "#D4AF37",
+          600: "#B8952B",
+          700: "#8A6D1F",
+          800: "#5E4A15",
+          900: "#3A2D0D",
         },
       },
       borderRadius: {

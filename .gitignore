@@ -44,3 +44,16 @@ next-env.d.ts
 # supabase cli
 /supabase/.temp
 
+# IDEs & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# local test & scratch scripts
+test-*.mjs
+test-*.js
+test-*.ts
+
+# logs
+*.log

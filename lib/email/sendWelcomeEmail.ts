@@ -36,7 +36,10 @@ export async function sendWelcomeEmail({
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c2b18; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded-radius: 12px;">
-      <h2 style="color: #1c2b18; font-size: 22px; margin-bottom: 8px;">Welcome to Eduland Portal</h2>
+      <div style="text-align: center; margin-bottom: 16px;">
+        <img src="${appUrl}/logo.png" alt="Eduland School Logo" style="width: 56px; height: 56px; object-fit: contain;" />
+      </div>
+      <h2 style="color: #1c2b18; font-size: 22px; margin-bottom: 8px; text-align: center;">Welcome to Eduland Portal</h2>
       <p style="font-size: 14px; color: #4a5568; margin-top: 0;">Hello <strong>${fullName || toEmail}</strong>,</p>
       
       <p style="font-size: 14px; color: #4a5568;">
@@ -122,7 +125,10 @@ export async function sendPasswordResetEmail({
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; color: #1c2b18; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-      <h2 style="color: #1c2b18; font-size: 22px; margin-bottom: 8px;">Password Reset Notification</h2>
+      <div style="text-align: center; margin-bottom: 16px;">
+        <img src="${appUrl}/logo.png" alt="Eduland School Logo" style="width: 56px; height: 56px; object-fit: contain;" />
+      </div>
+      <h2 style="color: #1c2b18; font-size: 22px; margin-bottom: 8px; text-align: center;">Password Reset Notification</h2>
       <p style="font-size: 14px; color: #4a5568; margin-top: 0;">Hello <strong>${fullName || toEmail}</strong>,</p>
       
       <p style="font-size: 14px; color: #4a5568;">

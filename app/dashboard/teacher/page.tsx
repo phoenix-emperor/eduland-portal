@@ -104,6 +104,32 @@ export default async function TeacherDashboardPage() {
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </div>
         </Link>
+
+        {/* My Assigned Subjects Card */}
+        <Link
+          href="/dashboard/teacher/subjects"
+          className="group bg-white rounded-2xl p-6 border border-olive-200 shadow-sm hover:shadow-md transition-all hover:border-schoolYellow-400 flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-950 font-bold flex items-center justify-center mb-4 border border-amber-300 group-hover:scale-105 transition-transform">
+              <BookOpen className="w-6 h-6 text-amber-900" />
+            </div>
+            <h2 className="text-lg font-extrabold text-olive-950 mb-2 group-hover:text-amber-800 transition-colors">
+              My Subjects
+            </h2>
+            <p className="text-xs text-olive-700 leading-relaxed font-medium mb-6">
+              View your subject assignments across classes and manage subject deletions if no longer offered.
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-olive-100 flex items-center justify-between text-xs font-bold text-olive-900 group-hover:text-amber-900">
+            <span className="flex items-center space-x-1">
+              <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+              <span>Assigned Subjects</span>
+            </span>
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          </div>
+        </Link>
       </div>
     </div>
   );

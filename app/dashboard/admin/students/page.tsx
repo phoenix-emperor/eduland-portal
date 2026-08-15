@@ -1,14 +1,17 @@
 /**
  * @file app/dashboard/admin/students/page.tsx
  * @description Server component for Add & Manage Students in the Admin Dashboard.
- * Fetches school classes, students, and generates signed URLs for student passport photos
- * stored in the private 'passports' storage bucket.
+ * Fetches school classes, students, parent profiles (with auth emails), guardian links,
+ * and generates signed URLs for student passport photos stored in private 'passports' bucket.
  */
 
 import { requireRole } from '@/lib/auth/guard';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import ManageStudentsClient, {
   StudentWithSignedUrl,
+  ParentProfileOption,
+  StudentGuardianLink,
 } from './ManageStudentsClient';
 import { ClassItem, StudentItem } from '@/lib/types/database';
 
@@ -53,10 +56,76 @@ export default async function ManageStudentsPage() {
     })
   );
 
+  // 4. Fetch auth emails for parent user profile mapping
+  const emailMap: Record<string, string> = {};
+  try {
+    const adminSupabase = createAdminClient();
+    const { data: authData } = await adminSupabase.auth.admin.listUsers();
+    if (authData?.users) {
+      authData.users.forEach((u) => {
+        if (u.id && u.email) {
+          emailMap[u.id] = u.email;
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Failed to list auth users for guardian email mapping:', err);
+  }
+
+  // 5. Fetch all parent profiles for this school
+  const { data: parentProfilesRaw } = await (supabase.from('profiles') as any)
+    .select('id, full_name, role')
+    .eq('school_id', schoolId)
+    .eq('role', 'parent')
+    .order('full_name', { ascending: true });
+
+  const parentProfiles: ParentProfileOption[] = (parentProfilesRaw || []).map(
+    (p: any) => ({
+      id: p.id,
+      fullName: p.full_name,
+      email: emailMap[p.id] || null,
+    })
+  );
+
+  // 6. Fetch all guardian-student links
+  const { data: guardianLinksRaw } = await (supabase.from('guardians_students') as any)
+    .select(`
+      guardian_id,
+      student_id,
+      profiles:guardian_id (
+        id,
+        full_name
+      )
+    `);
+
+  const studentGuardianMap: Record<string, StudentGuardianLink[]> = {};
+
+  if (guardianLinksRaw && Array.isArray(guardianLinksRaw)) {
+    guardianLinksRaw.forEach((item: any) => {
+      const gId = item.guardian_id;
+      const sId = item.student_id;
+      const pName = item.profiles?.full_name || 'Parent Account';
+
+      if (sId && gId) {
+        if (!studentGuardianMap[sId]) {
+          studentGuardianMap[sId] = [];
+        }
+        studentGuardianMap[sId].push({
+          guardianId: gId,
+          studentId: sId,
+          fullName: pName,
+          email: emailMap[gId] || null,
+        });
+      }
+    });
+  }
+
   return (
     <ManageStudentsClient
       classes={classes}
       students={students}
+      parentProfiles={parentProfiles}
+      studentGuardianMap={studentGuardianMap}
     />
   );
 }

@@ -1,68 +1,107 @@
 @import "tailwindcss";
 
+/**
+ * @file app/globals.css
+ * @description Global stylesheet and CSS custom properties for Eduland Portal.
+ * Enforces official brand tokens:
+ * - Page Background: Warm off-white (#FAF7EF)
+ * - Cards & Surfaces: Pure white (#FFFFFF) for high data-density contrast
+ * - Border Color: Warm-neutral light gray (#E0DED4)
+ * - Destructive: Standard clear red (#DC2626) to remain distinct from brand colors
+ */
+
+@theme {
+  --color-olive-50: #EAF3DE;
+  --color-olive-100: #D3E8C2;
+  --color-olive-200: #B0D695;
+  --color-olive-300: #8AC168;
+  --color-olive-400: #5CA83F;
+  --color-olive-500: #3D9331;
+  --color-olive-600: #269D43;
+  --color-olive-700: #1B7A34;
+  --color-olive-800: #145E28;
+  --color-olive-900: #0D451D;
+  --color-olive-950: #082E13;
+
+  --color-schoolYellow-50: #FDF8E8;
+  --color-schoolYellow-100: #FAEEC3;
+  --color-schoolYellow-200: #F4DD8E;
+  --color-schoolYellow-300: #EDCB5C;
+  --color-schoolYellow-400: #DFBB44;
+  --color-schoolYellow-500: #D4AF37;
+  --color-schoolYellow-600: #B8952B;
+  --color-schoolYellow-700: #8A6D1F;
+  --color-schoolYellow-800: #5E4A15;
+  --color-schoolYellow-900: #3A2D0D;
+}
+
 @layer base {
   :root {
-    --background: 75 25% 98%;
-    --foreground: 75 30% 12%;
+    /* Warm off-white page background (#FAF7EF) */
+    --background: 44 50% 96%;
+    --foreground: 135 30% 12%;
 
+    /* Pure white card surfaces (#FFFFFF) */
     --card: 0 0% 100%;
-    --card-foreground: 75 30% 12%;
+    --card-foreground: 135 30% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 75 30% 12%;
+    --popover-foreground: 135 30% 12%;
 
-    /* Olive green primary (#6B7A3D) */
-    --primary: 75 33% 36%;
-    --primary-foreground: 75 25% 98%;
+    /* Eduland Primary Green (#269D43) */
+    --primary: 135 61% 38%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Warm yellow accent (#F2C744) */
-    --accent: 45 87% 61%;
-    --accent-foreground: 45 90% 12%;
+    /* Eduland Accent Gold (#D4AF37) */
+    --accent: 46 65% 52%;
+    --accent-foreground: 46 90% 12%;
 
-    --secondary: 75 20% 92%;
-    --secondary-foreground: 75 35% 25%;
+    --secondary: 44 30% 92%;
+    --secondary-foreground: 135 30% 20%;
 
-    --muted: 75 15% 94%;
-    --muted-foreground: 75 10% 40%;
+    --muted: 44 20% 93%;
+    --muted-foreground: 135 15% 40%;
 
-    --destructive: 0 84% 60%;
+    /* Standard clear red for danger/destructive actions (#DC2626) */
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 75 20% 88%;
-    --input: 75 20% 88%;
-    --ring: 75 33% 36%;
+    /* Warm-neutral light gray border (#E0DED4) */
+    --border: 50 17% 85%;
+    --input: 50 17% 85%;
+    --ring: 135 61% 38%;
 
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 75 20% 8%;
-    --foreground: 75 15% 95%;
+    --background: 135 20% 8%;
+    --foreground: 44 15% 95%;
 
-    --card: 75 20% 11%;
-    --card-foreground: 75 15% 95%;
+    --card: 135 20% 11%;
+    --card-foreground: 44 15% 95%;
 
-    --popover: 75 20% 11%;
-    --popover-foreground: 75 15% 95%;
+    --popover: 135 20% 11%;
+    --popover-foreground: 44 15% 95%;
 
-    --primary: 75 33% 46%;
-    --primary-foreground: 75 25% 98%;
+    --primary: 135 61% 38%;
+    --primary-foreground: 0 0% 100%;
 
-    --accent: 45 87% 61%;
-    --accent-foreground: 45 90% 12%;
+    --accent: 46 65% 52%;
+    --accent-foreground: 46 90% 12%;
 
-    --secondary: 75 15% 18%;
-    --secondary-foreground: 75 15% 90%;
+    --secondary: 135 15% 18%;
+    --secondary-foreground: 44 15% 90%;
 
-    --muted: 75 15% 18%;
-    --muted-foreground: 75 10% 65%;
+    --muted: 135 15% 18%;
+    --muted-foreground: 44 10% 65%;
 
     --destructive: 0 62% 30%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 75 15% 22%;
-    --input: 75 15% 22%;
-    --ring: 75 33% 46%;
+    --border: 135 15% 22%;
+    --input: 135 15% 22%;
+    --ring: 135 61% 38%;
   }
 }
 

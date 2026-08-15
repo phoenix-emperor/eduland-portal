@@ -6,6 +6,8 @@
 
 import { requireRole } from '@/lib/auth/guard';
 import { DashboardHeader } from '@/components/dashboard/Header';
+import { DashboardNav } from '@/components/dashboard/DashboardNav';
+import { adminNavLinks } from '@/components/dashboard/navLinks';
 
 export default async function AdminDashboardLayout({
   children,
@@ -23,6 +25,7 @@ export default async function AdminDashboardLayout({
         fullName={profile?.full_name || 'Admin User'}
         roleDisplayName={roleDisplayName}
       />
+      <DashboardNav links={adminNavLinks} />
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
         {children}
       </main>

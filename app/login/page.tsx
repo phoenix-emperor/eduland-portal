@@ -15,8 +15,12 @@ export default function LoginPage() {
     <div className="min-h-screen bg-olive-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       {/* Top Header / Branding Banner */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="mx-auto w-16 h-16 bg-olive-700 rounded-2xl flex items-center justify-center shadow-lg border-2 border-schoolYellow-400 mb-4">
-          <GraduationCap className="w-10 h-10 text-schoolYellow-400" />
+        <div className="mx-auto w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg border-2 border-schoolYellow-400 mb-4 p-2.5">
+          <img
+            src="/logo.png"
+            alt="Eduland School Logo"
+            className="w-full h-full object-contain"
+          />
         </div>
         <h2 className="text-3xl font-extrabold text-olive-900 tracking-tight">
           Eduland School Portal
