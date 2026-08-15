@@ -370,3 +370,163 @@ export async function getAttendanceStudentsAndRecordsAction({
 
   return { students, attendanceMap, existingDaysOpened };
 }
+
+export interface CommentInputItem {
+  studentId: string;
+  comment: string;
+}
+
+export interface BulkSaveGeneralCommentsParams {
+  classId: string;
+  termId: string;
+  comments: CommentInputItem[];
+}
+
+/**
+ * Bulk saves or updates general comments for students in a designated class for a given term.
+ * CLASS-TEACHER-ONLY: Validates that the acting teacher is designated as classes.class_teacher_id.
+ * Performs database upsert using unique constraint on (student_id, term_id).
+ * EXCLUDES `class_teacher_signature_url` entirely from the upsert payload.
+ *
+ * @param params - BulkSaveGeneralCommentsParams containing classId, termId, and comments array.
+ * @returns Object with `{ success: true, count: number }` or `{ error: string }`.
+ */
+export async function bulkSaveGeneralCommentsAction({
+  classId,
+  termId,
+  comments,
+}: BulkSaveGeneralCommentsParams): Promise<{ success?: boolean; count?: number; error?: string }> {
+  const { user, profile } = await requireRole(['teacher', 'admin', 'super_admin']);
+
+  if (!profile?.school_id) {
+    return { error: 'School ID not found for your account.' };
+  }
+
+  if (!classId || !termId) {
+    return { error: 'Class and Term must be selected.' };
+  }
+
+  if (!comments || !Array.isArray(comments) || comments.length === 0) {
+    return { error: 'No student comments provided to save.' };
+  }
+
+  const supabase = await createClient();
+
+  // Class Teacher Verification:
+  // If acting user is a plain teacher, verify they are designated as `class_teacher_id` for this class
+  if (profile.role === 'teacher') {
+    const { data: classCheck } = await supabase
+      .from('classes')
+      .select('id')
+      .eq('id', classId)
+      .eq('class_teacher_id', user.id)
+      .eq('school_id', profile.school_id)
+      .maybeSingle();
+
+    if (!classCheck) {
+      return { error: 'You are not designated as the class teacher for this class.' };
+    }
+  }
+
+  // Construct Upsert Payload (EXCLUDES `class_teacher_signature_url` entirely)
+  const rowsToUpsert = comments.map((item) => {
+    const trimmed = item.comment ? item.comment.trim() : '';
+    return {
+      school_id: profile.school_id,
+      student_id: item.studentId,
+      term_id: termId,
+      general_comment: trimmed.length > 0 ? trimmed : null,
+      written_by: user.id,
+      updated_at: new Date().toISOString(),
+    };
+  });
+
+  try {
+    const { error: upsertErr } = await supabase
+      .from('report_comments')
+      .upsert(rowsToUpsert, {
+        onConflict: 'student_id,term_id',
+      });
+
+    if (upsertErr) {
+      console.error('Report comments bulk upsert error:', upsertErr);
+      const errMsg = upsertErr.message?.toLowerCase() || '';
+
+      if (errMsg.includes('row-level security') || errMsg.includes('policy')) {
+        return { error: 'You do not have permission to save general comments for this class.' };
+      }
+      return { error: upsertErr.message || 'Failed to save general comments to the database.' };
+    }
+
+    revalidatePath('/dashboard/teacher/comments');
+    return { success: true, count: rowsToUpsert.length };
+  } catch (err: any) {
+    console.error('Unexpected error during general comments save:', err);
+    return { error: err?.message || 'An unexpected error occurred while saving general comments.' };
+  }
+}
+
+/**
+ * Fetches enrolled students in a class alongside their existing general comments for a specific term.
+ *
+ * @param classId - Target class ID.
+ * @param termId - Target term ID.
+ * @returns Object with students and commentsMap.
+ */
+export async function getCommentsStudentsAndRecordsAction({
+  classId,
+  termId,
+}: {
+  classId: string;
+  termId: string;
+}) {
+  const { profile } = await requireRole(['teacher', 'admin', 'super_admin']);
+
+  if (!profile?.school_id || !classId || !termId) {
+    return { students: [], commentsMap: {} };
+  }
+
+  const supabase = await createClient();
+
+  // 1. Fetch all students in the class
+  const { data: students, error: studentErr } = await supabase
+    .from('students')
+    .select('id, full_name, admission_number')
+    .eq('class_id', classId)
+    .eq('school_id', profile.school_id)
+    .order('full_name', { ascending: true });
+
+  if (studentErr || !students) {
+    console.error('Failed to fetch class students for general comments:', studentErr);
+    return { students: [], commentsMap: {} };
+  }
+
+  // 2. Fetch existing report comments for this class & term
+  const { data: existingComments, error: commentErr } = await supabase
+    .from('report_comments')
+    .select('id, student_id, general_comment')
+    .eq('term_id', termId)
+    .eq('school_id', profile.school_id);
+
+  if (commentErr) {
+    console.error('Failed to fetch existing general comments:', commentErr);
+  }
+
+  // Map comments by student_id
+  const commentsMap: Record<string, { id?: string; comment: string }> = {};
+
+  if (existingComments && existingComments.length > 0) {
+    const classStudentIds = new Set(students.map((s) => s.id));
+
+    existingComments.forEach((c) => {
+      if (classStudentIds.has(c.student_id)) {
+        commentsMap[c.student_id] = {
+          id: c.id,
+          comment: c.general_comment || '',
+        };
+      }
+    });
+  }
+
+  return { students, commentsMap };
+}

@@ -5,7 +5,7 @@
 
 import { requireRole } from '@/lib/auth/guard';
 import Link from 'next/link';
-import { BookOpen, ArrowRight, Award, UserCheck } from 'lucide-react';
+import { BookOpen, ArrowRight, Award, UserCheck, MessageSquare } from 'lucide-react';
 
 export default async function TeacherDashboardPage() {
   const { profile } = await requireRole(['teacher', 'admin', 'super_admin']);
@@ -74,6 +74,32 @@ export default async function TeacherDashboardPage() {
             <span className="flex items-center space-x-1">
               <UserCheck className="w-3.5 h-3.5 text-schoolYellow-600" />
               <span>Class Teacher Portal</span>
+            </span>
+            <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          </div>
+        </Link>
+
+        {/* General Report Comments Card */}
+        <Link
+          href="/dashboard/teacher/comments"
+          className="group bg-white rounded-2xl p-6 border border-olive-200 shadow-sm hover:shadow-md transition-all hover:border-schoolYellow-400 flex flex-col justify-between"
+        >
+          <div>
+            <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-950 font-bold flex items-center justify-center mb-4 border border-purple-300 group-hover:scale-105 transition-transform">
+              <MessageSquare className="w-6 h-6 text-purple-900" />
+            </div>
+            <h2 className="text-lg font-extrabold text-olive-950 mb-2 group-hover:text-amber-800 transition-colors">
+              General Comments
+            </h2>
+            <p className="text-xs text-olive-700 leading-relaxed font-medium mb-6">
+              Write end-of-term general comments for students on their report cards. Class Teacher access only.
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-olive-100 flex items-center justify-between text-xs font-bold text-olive-900 group-hover:text-amber-900">
+            <span className="flex items-center space-x-1">
+              <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+              <span>Report Card Comments</span>
             </span>
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </div>
