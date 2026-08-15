@@ -118,3 +118,17 @@ export const teacherNavLinks: NavLinkItem[] = [
     iconName: 'subjects',
   },
 ];
+
+/** Navigation links for Parent role */
+export const parentNavLinks: NavLinkItem[] = [
+  {
+    label: 'Current Report',
+    href: '/dashboard/parent',
+    iconName: 'dashboard',
+  },
+  {
+    label: 'Report History',
+    href: '/dashboard/parent/history',
+    iconName: 'terms',
+  },
+];

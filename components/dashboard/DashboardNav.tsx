@@ -47,7 +47,8 @@ export function DashboardNav({ links }: DashboardNavProps) {
     if (
       href === '/dashboard/admin' ||
       href === '/dashboard/super-admin' ||
-      href === '/dashboard/teacher'
+      href === '/dashboard/teacher' ||
+      href === '/dashboard/parent'
     ) {
       return pathname === href;
     }
@@ -82,3 +83,5 @@ export function DashboardNav({ links }: DashboardNavProps) {
     </nav>
   );
 }
+
+export default DashboardNav;
