@@ -56,7 +56,7 @@ export function DashboardNav({ links }: DashboardNavProps) {
   };
 
   return (
-    <nav className="bg-olive-900 border-b border-olive-700/80 shadow-md">
+    <nav className="bg-olive-900 border-b border-olive-700/80 shadow-md print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center space-x-1.5 sm:space-x-2 py-2 overflow-x-auto whitespace-nowrap scrollbar-none">
           {links.map((link) => {

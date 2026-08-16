@@ -228,6 +228,7 @@ export type Database = {
           created_at: string
           full_name: string
           id: string
+          is_disabled?: boolean | null
           must_change_password: boolean
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -238,6 +239,7 @@ export type Database = {
           created_at?: string
           full_name: string
           id: string
+          is_disabled?: boolean | null
           must_change_password?: boolean
           phone?: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -248,6 +250,7 @@ export type Database = {
           created_at?: string
           full_name?: string
           id?: string
+          is_disabled?: boolean | null
           must_change_password?: boolean
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -791,23 +794,11 @@ export const Constants = {
       user_role: ["parent", "teacher", "admin", "super_admin"],
     },
   },
-} as const
+} as const;
 
-export type UserRole = Database["public"]["Enums"]["user_role"];
-export type Profile = Database["public"]["Tables"]["profiles"]["Row"] & {
-  phone?: string | null;
-  must_change_password?: boolean;
-  is_disabled?: boolean;
-};
-export type ClassItem = Database["public"]["Tables"]["classes"]["Row"] & { class_teacher_id?: string | null };
-export type SubjectItem = Database["public"]["Tables"]["subjects"]["Row"];
-export type StudentItem = Database["public"]["Tables"]["students"]["Row"] & {
-  date_of_birth?: string | null;
-  gender?: string | null;
-  admission_number?: string | null;
-  height_cm?: number | null;
-  weight_kg?: number | null;
-};
-export type TermItem = Database["public"]["Tables"]["terms"]["Row"];
-export type EnrollmentItem = Database["public"]["Tables"]["enrollments"]["Row"];
-
+export type UserRole = Database['public']['Enums']['user_role'];
+export type Profile = Tables<'profiles'>;
+export type TermItem = Tables<'terms'>;
+export type ClassItem = Tables<'classes'>;
+export type SubjectItem = Tables<'subjects'>;
+export type StudentItem = Tables<'students'>;

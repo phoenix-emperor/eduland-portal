@@ -96,7 +96,7 @@ export default function ParentReportClient({
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header Bar: Multi-Child Selector & Report History Quick Link */}
-      <div className="bg-white rounded-2xl p-4 border border-olive-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl p-4 border border-olive-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4 print:hidden">
         {/* Child Selector Tabs */}
         {students.length > 1 ? (
           <div className="flex items-center space-x-2 overflow-x-auto w-full sm:w-auto">

@@ -108,7 +108,7 @@ export default function ParentHistoryClient({
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Top Header Navigation & Action Bar */}
-      <div className="bg-white rounded-2xl p-5 border border-olive-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-white rounded-2xl p-5 border border-olive-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4 print:hidden">
         <div>
           <div className="flex items-center space-x-2 text-olive-950 font-black text-xl">
             <BookOpen className="w-6 h-6 text-schoolYellow-600" />
@@ -130,7 +130,7 @@ export default function ParentHistoryClient({
       </div>
 
       {/* Child & Term Selector Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-olive-200 shadow-sm space-y-3">
+      <div className="bg-white rounded-2xl p-4 border border-olive-200 shadow-sm space-y-3 print:hidden">
         {/* Child Selector Tabs (when 2+ children exist) */}
         {students.length > 1 && (
           <div className="flex items-center space-x-2 overflow-x-auto pb-2 border-b border-olive-100">

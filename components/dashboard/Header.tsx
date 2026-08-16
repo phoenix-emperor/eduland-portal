@@ -10,7 +10,7 @@ export function DashboardHeader({
   roleDisplayName,
 }: DashboardHeaderProps) {
   return (
-    <header className="bg-olive-800 text-white shadow-md border-b-4 border-schoolYellow-500">
+    <header className="bg-olive-800 text-white shadow-md border-b-4 border-schoolYellow-500 print:hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <img
