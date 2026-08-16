@@ -1,11 +1,13 @@
 /**
  * @file lib/utils/exportPdf.ts
  * @description Reusable client-side PDF export utility function.
- * Uses html2canvas to capture a target HTML container and jsPDF to compile a high-DPI A4 PDF document.
+ * Uses html-to-image (native browser foreignObject SVG rendering) to capture target HTML containers
+ * and jsPDF to compile high-DPI A4 PDF documents.
+ * Native SVG rendering guarantees 100% compatibility with Tailwind CSS v4 modern lab()/oklab() color functions.
  * Includes base64 image preloading to guarantee CORS compatibility with signed Supabase Storage URLs.
  */
 
-import html2canvas from 'html2canvas';
+import { toJpeg } from 'html-to-image';
 import jsPDF from 'jspdf';
 
 export interface PdfExportOptions {
@@ -36,7 +38,8 @@ async function toBase64(url: string): Promise<string> {
 
 /**
  * Captures an HTML element container by ID and exports it as a clean A4 PDF file.
- * Handles high-DPI scaling, CORS signed passport URLs, multi-page layout, and filesystem filename sanitization.
+ * Uses html-to-image for native browser rendering (bypassing outdated CSS color parsers)
+ * and jsPDF to construct multi-page A4 documents.
  *
  * @param options - Object containing target elementId and output filename.
  */
@@ -49,7 +52,7 @@ export async function exportReportAsPdf({
     throw new Error(`Report container #${elementId} not found.`);
   }
 
-  // Pre-load img elements to base64 data URLs to prevent canvas tainting on cross-origin image URLs
+  // Pre-load img elements to base64 data URLs to prevent CORS image rendering issues
   const imgElements = Array.from(element.querySelectorAll('img'));
   const originalSrcs: { img: HTMLImageElement; originalSrc: string }[] = [];
 
@@ -66,67 +69,24 @@ export async function exportReportAsPdf({
   }
 
   try {
-    // Generate high-DPI canvas with lab/oklab color sanitizer in onclone
-    const canvas = await html2canvas(element, {
-      scale: 2, // 2x resolution for crisp high-DPI rendering
-      useCORS: true,
-      allowTaint: true,
+    // Render HTML container using html-to-image (native browser foreignObject rendering)
+    // This natively supports Tailwind v4 lab()/oklab() color functions without CSS parsing errors.
+    const imgData = await toJpeg(element, {
+      quality: 0.95,
+      pixelRatio: 2,
+      cacheBust: true,
       backgroundColor: '#FFFFFF',
-      logging: false,
-      onclone: (clonedDoc) => {
-        // 1. Sanitize all <style> tags in clonedDoc head to remove modern lab()/oklab()/lch() declarations from Tailwind v4
-        const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
-        styleElements.forEach((styleEl) => {
-          if (styleEl.textContent) {
-            styleEl.textContent = styleEl.textContent
-              .replace(/(?:ok)?lab\([^)]+\)/gi, 'rgb(0, 0, 0)')
-              .replace(/lch\([^)]+\)/gi, 'rgb(0, 0, 0)');
-          }
-        });
-
-        // 2. Convert computed styles on all cloned DOM elements to standard RGB/hex strings
-        const canvas = clonedDoc.createElement('canvas');
-        canvas.width = 1;
-        canvas.height = 1;
-        const ctx = canvas.getContext('2d');
-
-        const toStandardColor = (val: string): string => {
-          if (!val || (!val.includes('lab') && !val.includes('lch'))) return val;
-          if (!ctx) return 'rgb(0, 0, 0)';
-          try {
-            ctx.fillStyle = val;
-            return ctx.fillStyle; // Modern browser canvas converts lab()/oklab() to hex/rgb natively
-          } catch {
-            return 'rgb(0, 0, 0)';
-          }
-        };
-
-        const allNodes = clonedDoc.querySelectorAll('*');
-        allNodes.forEach((node) => {
-          const el = node as HTMLElement;
-          if (!el.style) return;
-          const computed = clonedDoc.defaultView?.getComputedStyle(el);
-          if (computed) {
-            ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'fill', 'stroke'].forEach((prop) => {
-              const val = computed.getPropertyValue(prop);
-              if (val && (val.includes('lab') || val.includes('lch'))) {
-                const stdColor = toStandardColor(val);
-                el.style.setProperty(prop, stdColor, 'important');
-              }
-            });
-          }
-        });
-      },
     });
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const pdf = new jsPDF('p', 'mm', 'a4');
-
     const pdfWidth = pdf.internal.pageSize.getWidth(); // 210mm for A4
     const pdfHeight = pdf.internal.pageSize.getHeight(); // 297mm for A4
 
+    const elementWidth = element.offsetWidth || 800;
+    const elementHeight = element.offsetHeight || 1000;
+
     const imgWidth = pdfWidth;
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+    const imgHeight = (elementHeight * pdfWidth) / elementWidth;
 
     let heightLeft = imgHeight;
     let position = 0;
@@ -143,8 +103,8 @@ export async function exportReportAsPdf({
 
     // Sanitize filename for filesystem safety
     const safeFilename = filename
-      .replace(/[/\\?%*:|"<>]/g, '-') // Replace unsafe path characters with dashes
-      .replace(/\s+/g, ' ') // Collapse multiple spaces
+      .replace(/[/\\?%*:|"<>]/g, '-')
+      .replace(/\s+/g, ' ')
       .trim()
       .concat('.pdf');
 
