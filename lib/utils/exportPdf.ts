@@ -74,17 +74,46 @@ export async function exportReportAsPdf({
       backgroundColor: '#FFFFFF',
       logging: false,
       onclone: (clonedDoc) => {
-        // Sanitize any computed lab() or oklab() color values in cloned DOM nodes to prevent html2canvas color parser warnings
+        // 1. Sanitize all <style> tags in clonedDoc head to remove modern lab()/oklab()/lch() declarations from Tailwind v4
+        const styleElements = Array.from(clonedDoc.querySelectorAll('style'));
+        styleElements.forEach((styleEl) => {
+          if (styleEl.textContent) {
+            styleEl.textContent = styleEl.textContent
+              .replace(/(?:ok)?lab\([^)]+\)/gi, 'rgb(0, 0, 0)')
+              .replace(/lch\([^)]+\)/gi, 'rgb(0, 0, 0)');
+          }
+        });
+
+        // 2. Convert computed styles on all cloned DOM elements to standard RGB/hex strings
+        const canvas = clonedDoc.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        const ctx = canvas.getContext('2d');
+
+        const toStandardColor = (val: string): string => {
+          if (!val || (!val.includes('lab') && !val.includes('lch'))) return val;
+          if (!ctx) return 'rgb(0, 0, 0)';
+          try {
+            ctx.fillStyle = val;
+            return ctx.fillStyle; // Modern browser canvas converts lab()/oklab() to hex/rgb natively
+          } catch {
+            return 'rgb(0, 0, 0)';
+          }
+        };
+
         const allNodes = clonedDoc.querySelectorAll('*');
         allNodes.forEach((node) => {
           const el = node as HTMLElement;
           if (!el.style) return;
-          const cssText = el.style.cssText;
-          if (cssText && (cssText.includes('lab(') || cssText.includes('oklab(') || cssText.includes('lch('))) {
-            // Strip out modern lab/oklab declarations to let browser fall back to standard RGB values
-            el.style.cssText = cssText
-              .replace(/(?:color|background-color|border-color):\s*(?:ok)?lab\([^)]+\);?/gi, '')
-              .replace(/(?:color|background-color|border-color):\s*lch\([^)]+\);?/gi, '');
+          const computed = clonedDoc.defaultView?.getComputedStyle(el);
+          if (computed) {
+            ['color', 'backgroundColor', 'borderColor', 'outlineColor', 'fill', 'stroke'].forEach((prop) => {
+              const val = computed.getPropertyValue(prop);
+              if (val && (val.includes('lab') || val.includes('lch'))) {
+                const stdColor = toStandardColor(val);
+                el.style.setProperty(prop, stdColor, 'important');
+              }
+            });
           }
         });
       },
