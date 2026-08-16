@@ -35,6 +35,8 @@ import {
   Trash2,
   Mail,
   ShieldCheck,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { ClassItem, StudentItem } from '@/lib/types/database';
 
@@ -82,6 +84,28 @@ export default function ManageStudentsClient({
 
   // Search Filter
   const [searchTerm, setSearchTerm] = useState<string>('');
+
+  // Per-Class Collapsible State (map of classId -> boolean)
+  const [collapsedClassIds, setCollapsedClassIds] = useState<Record<string, boolean>>({});
+
+  const toggleClassCollapse = (classId: string) => {
+    setCollapsedClassIds((prev) => ({
+      ...prev,
+      [classId]: !prev[classId],
+    }));
+  };
+
+  const handleExpandAll = () => {
+    setCollapsedClassIds({});
+  };
+
+  const handleCollapseAll = () => {
+    const allCollapsed: Record<string, boolean> = {};
+    classes.forEach((c) => {
+      allCollapsed[c.id] = true;
+    });
+    setCollapsedClassIds(allCollapsed);
+  };
 
   // Add Form State
   const [addFullName, setAddFullName] = useState<string>('');
@@ -368,16 +392,38 @@ export default function ManageStudentsClient({
 
       {/* Main Content Area */}
       <div className="bg-white rounded-2xl border border-olive-200 shadow-sm p-6 sm:p-8 space-y-6">
-        {/* Search Bar */}
-        <div className="relative max-w-md">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-olive-400" />
-          <input
-            type="text"
-            placeholder="Search student by name or admission number..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-olive-200 rounded-xl text-sm font-semibold text-olive-900 focus:outline-none focus:ring-2 focus:ring-schoolYellow-500"
-          />
+        {/* Search Bar & Accordion Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="relative max-w-md w-full">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-olive-400" />
+            <input
+              type="text"
+              placeholder="Search student by name or admission number..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-olive-200 rounded-xl text-sm font-semibold text-olive-900 focus:outline-none focus:ring-2 focus:ring-schoolYellow-500"
+            />
+          </div>
+
+          {/* Global Expand All / Collapse All Controls */}
+          {classes.length > 0 && (
+            <div className="flex items-center space-x-2 text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={handleExpandAll}
+                className="px-3 py-1.5 bg-olive-50 hover:bg-olive-100 text-olive-900 border border-olive-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Expand All
+              </button>
+              <button
+                type="button"
+                onClick={handleCollapseAll}
+                className="px-3 py-1.5 bg-olive-50 hover:bg-olive-100 text-olive-900 border border-olive-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Collapse All
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Classes List with Enrolled Student Cards */}
@@ -394,102 +440,115 @@ export default function ManageStudentsClient({
         ) : (
           classes.map((cls) => {
             const classStudents = studentsByClass[cls.id] || [];
+            // Active search automatically expands matching classes; otherwise use collapsed state
+            const isCollapsed = !searchTerm.trim() && Boolean(collapsedClassIds[cls.id]);
 
             return (
               <div
                 key={cls.id}
-                className="bg-white rounded-2xl border border-olive-200 overflow-hidden shadow-2xs"
+                className="bg-white rounded-2xl border border-olive-200 overflow-hidden shadow-2xs transition-all"
               >
-                {/* Class Header Bar */}
-                <div className="p-4 bg-olive-50 border-b border-olive-200 flex items-center justify-between">
+                {/* Collapsible Class Header Bar */}
+                <button
+                  type="button"
+                  onClick={() => toggleClassCollapse(cls.id)}
+                  className="w-full p-4 bg-olive-50 hover:bg-olive-100/80 transition-colors flex items-center justify-between border-b border-olive-200 cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-schoolYellow-400"
+                >
                   <div className="flex items-center space-x-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-olive-100 flex items-center justify-center text-olive-800 shrink-0">
+                    <div className="w-8 h-8 rounded-lg bg-olive-100 flex items-center justify-center text-olive-800 shrink-0 border border-olive-200">
                       <GraduationCap className="w-4.5 h-4.5" />
                     </div>
                     <h2 className="font-extrabold text-olive-950 text-base">
                       {cls.name}
                     </h2>
+                    {isCollapsed ? (
+                      <ChevronRight className="w-4 h-4 text-olive-600 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-olive-600 shrink-0" />
+                    )}
                   </div>
                   <span className="text-xs font-bold px-3 py-1 bg-olive-100 text-olive-900 border border-olive-200 rounded-full">
                     {classStudents.length} {classStudents.length === 1 ? 'Student' : 'Students'}
                   </span>
-                </div>
+                </button>
 
-                {/* Class Student Cards Grid */}
-                {classStudents.length === 0 ? (
-                  <div className="p-6 text-center text-xs text-olive-500 font-medium italic">
-                    No students currently enrolled in {cls.name}.
-                  </div>
-                ) : (
-                  <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {classStudents.map((student) => {
-                      const linkedGuardians = studentGuardianMap[student.id] || [];
+                {/* Class Student Cards Grid (Only rendered when expanded) */}
+                {!isCollapsed && (
+                  classStudents.length === 0 ? (
+                    <div className="p-6 text-center text-xs text-olive-500 font-medium italic">
+                      No students currently enrolled in {cls.name}.
+                    </div>
+                  ) : (
+                    <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {classStudents.map((student) => {
+                        const linkedGuardians = studentGuardianMap[student.id] || [];
 
-                      return (
-                        <div
-                          key={student.id}
-                          className="p-4 rounded-xl border border-olive-200 bg-white hover:border-olive-300 shadow-2xs transition-all flex flex-col justify-between space-y-3"
-                        >
-                          <div className="flex items-center space-x-3.5 min-w-0">
-                            {/* Passport Thumbnail */}
-                            {student.signedPassportUrl ? (
-                              <img
-                                src={student.signedPassportUrl}
-                                alt={student.full_name}
-                                className="w-12 h-12 rounded-xl object-cover border border-olive-200 shadow-2xs shrink-0"
-                              />
-                            ) : (
-                              <div className="w-12 h-12 rounded-xl bg-olive-100 border border-olive-200 flex items-center justify-center text-olive-600 shrink-0">
-                                <User className="w-6 h-6 stroke-[2]" />
-                              </div>
-                            )}
-
-                            <div className="min-w-0 space-y-0.5">
-                              <h3 className="font-bold text-sm text-olive-950 truncate">
-                                {student.full_name}
-                              </h3>
-                              {student.admission_number && (
-                                <p className="text-xs font-semibold text-olive-700 font-mono">
-                                  Adm #: <span className="text-olive-950 font-bold">{student.admission_number}</span>
-                                </p>
+                        return (
+                          <div
+                            key={student.id}
+                            className="p-4 rounded-xl border border-olive-200 bg-white hover:border-olive-300 shadow-2xs transition-all flex flex-col justify-between space-y-3"
+                          >
+                            <div className="flex items-center space-x-3.5 min-w-0">
+                              {/* Passport Thumbnail */}
+                              {student.signedPassportUrl ? (
+                                <img
+                                  src={student.signedPassportUrl}
+                                  alt={student.full_name}
+                                  className="w-12 h-12 rounded-xl object-cover border border-olive-200 shadow-2xs shrink-0"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-xl bg-olive-100 border border-olive-200 flex items-center justify-center text-olive-600 shrink-0">
+                                  <User className="w-6 h-6 stroke-[2]" />
+                                </div>
                               )}
+
+                              <div className="min-w-0 space-y-0.5">
+                                <h3 className="font-bold text-sm text-olive-950 truncate">
+                                  {student.full_name}
+                                </h3>
+                                {student.admission_number && (
+                                  <p className="text-xs font-semibold text-olive-700 font-mono">
+                                    Adm #: <span className="text-olive-950 font-bold">{student.admission_number}</span>
+                                  </p>
+                                )}
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Student Actions Bar */}
-                          <div className="pt-3 border-t border-olive-100 flex items-center justify-between gap-2">
-                            {/* Manage Guardians Button */}
-                            <button
-                              onClick={() => handleOpenGuardianModal(student)}
-                              className="px-2.5 py-1.5 bg-olive-50 hover:bg-olive-100 text-olive-800 rounded-lg border border-olive-200 transition-colors cursor-pointer flex items-center space-x-1.5 text-xs font-bold shrink-0"
-                              title="Manage Linked Guardians (Parents)"
-                            >
-                              <UserCheck className="w-3.5 h-3.5 text-schoolYellow-600" />
-                              <span>Guardians ({linkedGuardians.length})</span>
-                            </button>
-
-                            <div className="flex items-center space-x-1">
+                            {/* Student Actions Bar */}
+                            <div className="pt-3 border-t border-olive-100 flex items-center justify-between gap-2">
+                              {/* Manage Guardians Button */}
                               <button
-                                onClick={() => setPassportUploadTarget(student)}
-                                className="p-1.5 text-olive-700 hover:text-olive-950 hover:bg-olive-100 rounded-lg transition-colors cursor-pointer"
-                                title="Upload / Change Passport Photo"
+                                onClick={() => handleOpenGuardianModal(student)}
+                                className="px-2.5 py-1.5 bg-olive-50 hover:bg-olive-100 text-olive-800 rounded-lg border border-olive-200 transition-colors cursor-pointer flex items-center space-x-1.5 text-xs font-bold shrink-0"
+                                title="Manage Linked Guardians (Parents)"
                               >
-                                <Upload className="w-4 h-4" />
+                                <UserCheck className="w-3.5 h-3.5 text-schoolYellow-600" />
+                                <span>Guardians ({linkedGuardians.length})</span>
                               </button>
 
-                              <button
-                                onClick={() => handleOpenEditModal(student)}
-                                className="p-1.5 text-olive-700 hover:text-olive-950 hover:bg-olive-100 rounded-lg transition-colors cursor-pointer"
-                                title="Edit Student Details"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
+                              <div className="flex items-center space-x-1">
+                                <button
+                                  onClick={() => setPassportUploadTarget(student)}
+                                  className="p-1.5 text-olive-700 hover:text-olive-950 hover:bg-olive-100 rounded-lg transition-colors cursor-pointer"
+                                  title="Upload / Change Passport Photo"
+                                >
+                                  <Upload className="w-4 h-4" />
+                                </button>
+
+                                <button
+                                  onClick={() => handleOpenEditModal(student)}
+                                  className="p-1.5 text-olive-700 hover:text-olive-950 hover:bg-olive-100 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit Student Details"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  )
                 )}
               </div>
             );
