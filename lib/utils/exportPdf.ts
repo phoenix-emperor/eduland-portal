@@ -66,13 +66,28 @@ export async function exportReportAsPdf({
   }
 
   try {
-    // Generate high-DPI canvas
+    // Generate high-DPI canvas with lab/oklab color sanitizer in onclone
     const canvas = await html2canvas(element, {
       scale: 2, // 2x resolution for crisp high-DPI rendering
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#FFFFFF',
       logging: false,
+      onclone: (clonedDoc) => {
+        // Sanitize any computed lab() or oklab() color values in cloned DOM nodes to prevent html2canvas color parser warnings
+        const allNodes = clonedDoc.querySelectorAll('*');
+        allNodes.forEach((node) => {
+          const el = node as HTMLElement;
+          if (!el.style) return;
+          const cssText = el.style.cssText;
+          if (cssText && (cssText.includes('lab(') || cssText.includes('oklab(') || cssText.includes('lch('))) {
+            // Strip out modern lab/oklab declarations to let browser fall back to standard RGB values
+            el.style.cssText = cssText
+              .replace(/(?:color|background-color|border-color):\s*(?:ok)?lab\([^)]+\);?/gi, '')
+              .replace(/(?:color|background-color|border-color):\s*lch\([^)]+\);?/gi, '');
+          }
+        });
+      },
     });
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
