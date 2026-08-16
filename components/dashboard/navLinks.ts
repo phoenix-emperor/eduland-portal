@@ -14,7 +14,8 @@ export type IconKey =
   | 'gradebook'
   | 'attendance'
   | 'comments'
-  | 'subjects';
+  | 'subjects'
+  | 'reports';
 
 export interface NavLinkItem {
   label: string;
@@ -43,6 +44,11 @@ export const adminNavLinks: NavLinkItem[] = [
     label: 'Students',
     href: '/dashboard/admin/students',
     iconName: 'students',
+  },
+  {
+    label: 'Student Reports',
+    href: '/dashboard/admin/reports',
+    iconName: 'reports',
   },
   {
     label: 'Terms',
@@ -77,6 +83,11 @@ export const superAdminNavLinks: NavLinkItem[] = [
     label: 'Students',
     href: '/dashboard/admin/students',
     iconName: 'students',
+  },
+  {
+    label: 'Student Reports',
+    href: '/dashboard/admin/reports',
+    iconName: 'reports',
   },
   {
     label: 'Terms',

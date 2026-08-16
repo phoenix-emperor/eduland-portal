@@ -19,6 +19,7 @@ import {
   Calendar,
   Users,
   MessageSquare,
+  FileText,
 } from 'lucide-react';
 
 const iconMap: Record<IconKey, React.ComponentType<{ className?: string }>> = {
@@ -32,6 +33,7 @@ const iconMap: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   attendance: UserCheck,
   comments: MessageSquare,
   subjects: BookOpen,
+  reports: FileText,
 };
 
 interface DashboardNavProps {
